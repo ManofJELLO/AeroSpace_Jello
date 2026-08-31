@@ -270,6 +270,37 @@ final class MacosFullscreenLayoutTest: XCTestCase {
         assertEquals(w1.hWeight, 1) // the command's sizes won, the snapshot did not come back
     }
 
+    /// `BalanceSizesCommand` rewrites every tiling weight in the workspace (`child.setWeight(parent.orientation, 1)`
+    /// recursively), which is plainly a layout change, so it must invalidate the snapshot exactly like
+    /// `testLayoutChangingCommandInvalidatesTheSnapshot` demonstrates for `flatten-workspace-tree`.
+    func testBalanceSizesInvalidatesTheSnapshot() async throws {
+        let workspace = Workspace.get(byName: name)
+        let w1 = TestWindow.new(id: 1, parent: workspace.rootTilingContainer, adaptiveWeight: 200)
+        let w2 = TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: 500)
+        let w3 = TestWindow.new(id: 3, parent: workspace.rootTilingContainer, adaptiveWeight: 300)
+        assertEquals(w1.focusWindow(), true)
+
+        w2.isMacosFullscreenForTest = true
+        try await normalizeLayoutReason()
+        assertEquals(workspace.rootTilingContainer.layoutDescription, .h_tiles([.window(1), .window(3)]))
+
+        // balance-sizes sets every remaining tiled sibling's weight to 1, deliberately rebalancing the layout
+        // while w2 is away in fullscreen.
+        _ = await parseCommand("balance-sizes").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(w1.hWeight, 1)
+        assertEquals(w3.hWeight, 1)
+
+        w2.isMacosFullscreenForTest = false
+        try await normalizeLayoutReason()
+
+        assertEquals(
+            workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.windowId).toSet(),
+            [1, 2, 3],
+        )
+        assertEquals(w1.hWeight, 1) // balance-sizes's weights won, the snapshot did not come back
+        assertEquals(w3.hWeight, 1)
+    }
+
     func testResettingSnapshotsFallsBackToOldBehavior() async throws {
         let workspace = Workspace.get(byName: name)
         let w1 = TestWindow.new(id: 1, parent: workspace.rootTilingContainer, adaptiveWeight: 200)
