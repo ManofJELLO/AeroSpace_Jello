@@ -429,9 +429,13 @@ This technique eliminates the need for an additional binding for focusing floati
 
 When a window enters macOS native fullscreen (the green button, an app fullscreening itself, or the xref:commands.adoc#macos-native-fullscreen[macos-native-fullscreen] command), it leaves the <<tree,tiling tree>> for its own macOS Space.
 
-AeroSpace snapshots the workspace's tiling tree at that moment and restores it when the window comes back, so the window returns to the exact slot and size it left, and its siblings keep theirs.
+AeroSpace snapshots the workspace's tiling tree at that moment and restores it when the window comes back.
+The window returns to the slot and size it left, and its siblings keep theirs.
 
-The snapshot is discarded as soon as anything else changes that layout — any layout-changing command, or moving or resizing a window with the mouse. When that happens, exiting fullscreen falls back to placing the window next to the most recently focused one. Windows that merely opened while the app was fullscreen are kept and tiled alongside the restored layout.
+The snapshot is discarded once a layout-changing command runs, or a window is moved or resized with the mouse.
+When that happens, exiting fullscreen falls back to placing the window next to the most recently focused one instead.
+Windows that open while the app is fullscreen aren't part of the snapshot, so they get tiled in alongside the restored layout.
+Windows that close while the app is fullscreen are simply left out when the layout is restored.
 
 Configured by `preserve-layout-on-macos-native-fullscreen`:
 
