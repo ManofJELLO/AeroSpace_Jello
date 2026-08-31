@@ -47,9 +47,8 @@ on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 automatically-unhide-macos-hidden-apps = false
 
 # When a window enters macOS native fullscreen (the green button) and later exits it,
-# restore the workspace layout it had before, instead of re-tiling the window
-# next to the most recently focused one.
-# Set to false to always re-tile the window next to the most recently focused one instead.
+# restore the workspace layout it had before.
+# Set to false to instead re-tile the window next to the most recently focused one.
 # See https://nikitabobko.github.io/AeroSpace/guide#macos-native-fullscreen
 preserve-layout-on-macos-native-fullscreen = true
 
