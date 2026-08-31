@@ -206,6 +206,7 @@ final class FormatTest: XCTestCase {
         let window = TestWindow.new(id: 1, parent: macosPopupWindowsContainer)
         let obj = AeroObj.window(.forTest(window: window, title: nil))
         assertPrimitive(FormatVar.window(.windowLayout).expandFormatVar(obj: obj), .string("NULL-WINDOW-LAYOUT"))
+        window.unbindFromParent() // macosPopupWindowsContainer is global state; don't leak a TestWindow into later tests
     }
 
     func testExpandWindowToWorkspaceWhenWindowHasWorkspace() {
