@@ -202,4 +202,46 @@ final class MacosFullscreenLayoutTest: XCTestCase {
             .h_tiles([.window(1), .window(2)]),
         )
     }
+
+    /// Unlike `testNestedContainerSurvivesWhenItsOtherWindowClosed`, here the nested container is disjoint from the
+    /// returning window: it holds two windows that are both closed while the fullscreen window is away. So every
+    /// child of that snapshot container gets skipped by `restoreTreeRecursive`, and the container it already
+    /// constructed for that snapshot node is left in the rebuilt tree with no children at all.
+    func testNestedContainerLeftEmptyIsCleanedUpByNormalization() async throws {
+        let workspace = Workspace.get(byName: name)
+        let root = workspace.rootTilingContainer
+        let w1 = TestWindow.new(id: 1, parent: root)
+        let w2 = TestWindow.new(id: 2, parent: root)
+        let nested = TilingContainer(parent: root, adaptiveWeight: 1, .v, .tiles, index: INDEX_BIND_LAST)
+        let w4 = TestWindow.new(id: 4, parent: nested)
+        let w5 = TestWindow.new(id: 5, parent: nested)
+        assertEquals(w1.focusWindow(), true)
+
+        w2.isMacosFullscreenForTest = true
+        try await normalizeLayoutReason()
+
+        // Both of the nested container's windows become unrestorable while w2 is away
+        w4.closeAxWindow() // TestWindow.closeAxWindow just unbinds
+        w5.closeAxWindow()
+
+        w2.isMacosFullscreenForTest = false
+        try await normalizeLayoutReason()
+
+        // Right after exit: the nested container was rebuilt (restoreTreeRecursive always constructs the
+        // container before it knows whether any child will survive), but both of its children were skipped as
+        // unrestorable, so it comes back genuinely empty.
+        assertEquals(
+            workspace.rootTilingContainer.layoutDescription,
+            .h_tiles([.window(1), .window(2), .v_tiles([])]),
+        )
+
+        // `unbindEmptyAndAutoFlatten`'s else-branch unbinds empty non-root containers unconditionally - that path
+        // doesn't depend on `config.enableNormalizationFlattenContainers` (left at the test default of `false`
+        // here) - so the next normalization pass removes the leftover empty container.
+        workspace.normalizeContainers()
+        assertEquals(
+            workspace.rootTilingContainer.layoutDescription,
+            .h_tiles([.window(1), .window(2)]),
+        )
+    }
 }
