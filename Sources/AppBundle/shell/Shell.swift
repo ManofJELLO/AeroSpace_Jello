@@ -99,6 +99,9 @@ extension Shell where T == any Command {
     @MainActor func run(_ env: CmdEnv, _ io: CmdIo) async -> Int32ExitCode {
         switch self {
             case .cmd(let command):
+                // Before, not after: `eval 'macos-native-fullscreen'` would otherwise have EvalCommand's own
+                // shouldResetClosedWindowsCache destroy the snapshot the inner command just took.
+                if command.shouldResetClosedWindowsCache { resetMacosFullscreenLayoutSnapshots() }
                 let exitCode = Int32ExitCode(rawValue: await command.run(env, io).rawValue)
                 if command.shouldResetClosedWindowsCache { resetClosedWindowsCache() }
                 await refreshModel_nonCancellable()

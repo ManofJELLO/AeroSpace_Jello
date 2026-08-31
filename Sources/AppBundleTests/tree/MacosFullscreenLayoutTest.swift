@@ -244,4 +244,69 @@ final class MacosFullscreenLayoutTest: XCTestCase {
             .h_tiles([.window(1), .window(2)]),
         )
     }
+
+    func testLayoutChangingCommandInvalidatesTheSnapshot() async throws {
+        let workspace = Workspace.get(byName: name)
+        let w1 = TestWindow.new(id: 1, parent: workspace.rootTilingContainer, adaptiveWeight: 200)
+        let w2 = TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: 500)
+        TestWindow.new(id: 3, parent: workspace.rootTilingContainer, adaptiveWeight: 300)
+        assertEquals(w1.focusWindow(), true)
+
+        w2.isMacosFullscreenForTest = true
+        try await normalizeLayoutReason()
+
+        // flatten-workspace-tree has shouldResetClosedWindowsCache = true and rebinds
+        // every tiled window with adaptiveWeight 1, so it both invalidates and is observable
+        _ = await parseCommand("flatten-workspace-tree").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(w1.hWeight, 1)
+
+        w2.isMacosFullscreenForTest = false
+        try await normalizeLayoutReason()
+
+        assertEquals(
+            workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.windowId).toSet(),
+            [1, 2, 3],
+        )
+        assertEquals(w1.hWeight, 1) // the command's sizes won, the snapshot did not come back
+    }
+
+    func testResettingSnapshotsFallsBackToOldBehavior() async throws {
+        let workspace = Workspace.get(byName: name)
+        let w1 = TestWindow.new(id: 1, parent: workspace.rootTilingContainer, adaptiveWeight: 200)
+        let w2 = TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: 500)
+        assertEquals(w1.focusWindow(), true)
+
+        w2.isMacosFullscreenForTest = true
+        try await normalizeLayoutReason()
+        w1.hWeight = 600
+
+        resetMacosFullscreenLayoutSnapshots()
+
+        w2.isMacosFullscreenForTest = false
+        try await normalizeLayoutReason()
+
+        assertEquals(
+            workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.windowId).toSet(),
+            [1, 2],
+        )
+        assertEquals(w1.hWeight, 600) // not restored
+    }
+
+    func testDroppingOneSnapshotFallsBackToOldBehavior() async throws {
+        let workspace = Workspace.get(byName: name)
+        let w1 = TestWindow.new(id: 1, parent: workspace.rootTilingContainer, adaptiveWeight: 200)
+        let w2 = TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: 500)
+        assertEquals(w1.focusWindow(), true)
+
+        w2.isMacosFullscreenForTest = true
+        try await normalizeLayoutReason()
+
+        dropMacosFullscreenLayoutSnapshot(windowId: w2.windowId)
+        w1.hWeight = 600
+
+        w2.isMacosFullscreenForTest = false
+        try await normalizeLayoutReason()
+
+        assertEquals(w1.hWeight, 600) // not restored
+    }
 }

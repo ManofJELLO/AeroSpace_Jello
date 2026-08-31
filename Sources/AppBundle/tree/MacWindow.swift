@@ -80,6 +80,7 @@ final class MacWindow: Window {
         if MacWindow.allWindowsMap.removeValue(forKey: windowId) == nil {
             return
         }
+        dropMacosFullscreenLayoutSnapshot(windowId: windowId) // A dead window will never exit fullscreen
         if !skipClosedWindowsCache { cacheClosedWindowIfNeeded() }
         let parent = unbindFromParent().parent
         let deadWindowWorkspace = parent.nodeWorkspace
