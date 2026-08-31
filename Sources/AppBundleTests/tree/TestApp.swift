@@ -16,6 +16,8 @@ final class TestApp: AbstractApp {
         self.name = rawAppBundleId
     }
 
+    var isHiddenApp: Bool = false
+
     var _windows: [Window] = []
     var windows: [Window] {
         get { _windows }
