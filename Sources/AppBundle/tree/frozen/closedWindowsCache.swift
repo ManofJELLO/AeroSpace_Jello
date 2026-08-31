@@ -87,7 +87,14 @@ struct FrozenWorkspace: Sendable {
 
 @discardableResult
 @MainActor
-private func restoreTreeRecursive(frozenContainer: FrozenContainer, parent: NonLeafTreeNodeObject, index: Int) -> Bool {
+func restoreTreeRecursive(
+    frozenContainer: FrozenContainer,
+    parent: NonLeafTreeNodeObject,
+    index: Int,
+    /// Skip windows that no longer exist, or that are currently in a macOS unconventional state
+    /// (fullscreen/minimized/hidden), instead of aborting the whole restore
+    skipUnrestorableWindows: Bool = false,
+) -> Bool {
     let container = TilingContainer(
         parent: parent,
         adaptiveWeight: frozenContainer.weight,
@@ -96,16 +103,26 @@ private func restoreTreeRecursive(frozenContainer: FrozenContainer, parent: NonL
         index: index,
     )
 
-    for (index, child) in frozenContainer.children.enumerated() {
+    var childIndex = 0
+    for child in frozenContainer.children {
         switch child {
             case .window(let w):
-                // Stop the loop if can't find the window, because otherwise all the subsequent windows will have incorrect index
-                guard let window = MacWindow.get(byId: w.id) else { return false }
-                window.bind(to: container, adaptiveWeight: w.weight, index: index)
+                guard let window = MacWindow.get(byId: w.id), window.layoutReason == .standard else {
+                    if skipUnrestorableWindows { continue }
+                    // Stop the loop if can't find the window, because otherwise all the subsequent windows will have incorrect index
+                    return false
+                }
+                window.bind(to: container, adaptiveWeight: w.weight, index: childIndex)
             case .container(let c):
                 // There is no reason to continue
-                if !restoreTreeRecursive(frozenContainer: c, parent: container, index: index) { return false }
+                if !restoreTreeRecursive(
+                    frozenContainer: c,
+                    parent: container,
+                    index: childIndex,
+                    skipUnrestorableWindows: skipUnrestorableWindows,
+                ) { return false }
         }
+        childIndex += 1
     }
     return true
 }

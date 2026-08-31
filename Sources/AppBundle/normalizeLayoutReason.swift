@@ -32,8 +32,7 @@ private func _normalizeLayoutReason(workspace: Workspace, windows: [Window]) asy
                 guard let parent = window.parent else { continue }
                 switch true {
                     case isMacosFullscreen:
-                        window.layoutReason = .macos(prevParentKind: parent.kind)
-                        window.bind(to: workspace.macOsNativeFullscreenWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
+                        enterMacosNativeFullscreen(window: window, workspace: workspace, adaptiveWeight: WEIGHT_DOESNT_MATTER)
                     case isMacosMinimized:
                         window.layoutReason = .macos(prevParentKind: parent.kind)
                         window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
@@ -64,6 +63,7 @@ func exitMacOsNativeUnconventionalState(
         case .workspace:
             break // Not possible
         case .tilingContainer:
+            if try await restoreMacosFullscreenLayout(window: window, workspace: workspace, cm) { return }
             try await window.relayoutWindow(on: workspace, cm, forceTile: true)
         case .macosPopupWindowsContainer: // Since the window was minimized/fullscreened it was mistakenly detected as popup. Relayout the window
             try await window.relayoutWindow(on: workspace, cm)
