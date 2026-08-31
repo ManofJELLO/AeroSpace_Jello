@@ -15,6 +15,7 @@ let projectRoot: URL = {
 
 @MainActor
 func setUpWorkspacesForTests() {
+    resetMacosFullscreenLayoutSnapshots() // Prevent snapshots leaking from one test into the next, see 14511cd2
     config = defaultConfig
     configUrl = defaultConfigUrl
     config.enableNormalizationFlattenContainers = false // Make layout tests more predictable
