@@ -97,10 +97,20 @@ Public surface:
 ### Capture
 
 Called *before* the window is unbound, so the frozen tree still contains it at its original
-index and weight. Two entry points, both get the call:
+index and weight. Both entry points into fullscreen route through one shared helper,
+`enterMacosNativeFullscreen(window:workspace:adaptiveWeight:)`, which captures the snapshot,
+records `layoutReason = .macos(prevParentKind:)`, and binds the window into
+`macOsNativeFullscreenWindowsContainer`:
 
 - `Sources/AppBundle/normalizeLayoutReason.swift:36` — app-initiated fullscreen
 - `Sources/AppBundle/command/impl/MacosNativeFullscreenCommand.swift:37` — the command
+
+The command path additionally needs a small pre-existing bug fixed. Today it binds the window
+into the fullscreen container without setting `layoutReason`, so the *next* `normalizeLayoutReason`
+pass records `prevParentKind: .macosFullscreenWindowsContainer` — the "wtf case, should never be
+possible" branch — instead of `.tilingContainer`. Restore keys off `prevParentKind`, so without
+this fix the feature would silently never fire for `macos-native-fullscreen`. The shared helper
+fixes it by setting `layoutReason` at the point of binding.
 
 ### Restore
 
@@ -115,7 +125,7 @@ On success:
 
 1. `let existing = workspace.rootTilingContainer.allLeafWindowsRecursive`
 2. `prevRoot.unbindFromParent()` (hold `prevRoot` in a local so it is not collected early)
-3. Rebuild from `snapshot.rootTilingNode` via `restoreTreeRecursive(skipMissingWindows: true)`
+3. Rebuild from `snapshot.rootTilingNode` via `restoreTreeRecursive(skipUnrestorableWindows: true)`
 4. Every window in `existing` that did not land in the new tree is an orphan →
    `relayoutWindow(on: workspace, forceTile: true)`
 5. `window.markAsMostRecentChild()`
@@ -134,7 +144,7 @@ them: they are re-tiled alongside the restored layout rather than discarded.
 ### Tolerant `restoreTreeRecursive`
 
 `Sources/AppBundle/tree/frozen/closedWindowsCache.swift:90` currently returns `false` and leaves
-a half-built tree on the first missing window. Add a `skipMissingWindows: Bool = false`
+a half-built tree on the first missing window. Add a `skipUnrestorableWindows: Bool = false`
 parameter. The default preserves the existing lock-screen call site's behavior exactly.
 
 ### Invalidation
