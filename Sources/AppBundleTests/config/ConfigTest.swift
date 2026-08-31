@@ -733,6 +733,14 @@ final class ConfigTest: XCTestCase {
         assertEquals(colemakResult.config.keyMapping, KeyMapping(preset: .colemak, rawKeyNotationToKeyCode: [:]))
         assertEquals(colemakResult.config.keyMapping.resolve()["f"], .e)
     }
+
+    func testPreserveLayoutOnMacosNativeFullscreen() {
+        assertEquals(parseConfig("").config.preserveLayoutOnMacosNativeFullscreen, true)
+
+        let result = parseConfig("preserve-layout-on-macos-native-fullscreen = false")
+        assertEquals(result.errors, [])
+        assertEquals(result.config.preserveLayoutOnMacosNativeFullscreen, false)
+    }
 }
 
 extension ParseConfigResult {

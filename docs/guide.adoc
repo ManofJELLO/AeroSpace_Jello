@@ -424,6 +424,22 @@ The floating window parent container is determined as the smallest tiling contai
 
 This technique eliminates the need for an additional binding for focusing floating windows.
 
+[#macos-native-fullscreen]
+=== macOS native fullscreen
+
+When a window enters macOS native fullscreen (the green button, an app fullscreening itself, or the xref:commands.adoc#macos-native-fullscreen[macos-native-fullscreen] command), it leaves the <<tree,tiling tree>> for its own macOS Space.
+
+AeroSpace snapshots the workspace's tiling tree at that moment and restores it when the window comes back, so the window returns to the exact slot and size it left, and its siblings keep theirs.
+
+The snapshot is discarded as soon as anything else changes that layout — any layout-changing command, or moving or resizing a window with the mouse. When that happens, exiting fullscreen falls back to placing the window next to the most recently focused one. Windows that merely opened while the app was fullscreen are kept and tiled alongside the restored layout.
+
+Configured by `preserve-layout-on-macos-native-fullscreen`:
+
+[source,toml]
+----
+preserve-layout-on-macos-native-fullscreen = false
+----
+
 [#emulation-of-virtual-workspaces]
 == Emulation of virtual workspaces
 
