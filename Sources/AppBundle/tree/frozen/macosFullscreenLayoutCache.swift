@@ -49,8 +49,9 @@ func restoreMacosFullscreenLayout(window: Window, workspace: Workspace, _ cm: Ca
     // from `Workspace.all` - i.e. only windows still reachable from some workspace's tree. Every window that is
     // still genuinely part of the old layout (not itself off in a macOS unconventional state) is, at this point,
     // still a descendant of prevRoot, so prevRoot must stay attached to the workspace while those lookups happen.
-    // `restoreTreeRecursive` unbinds each window from prevRoot as it re-binds it into the new tree, so prevRoot is
-    // guaranteed to be left with no children by the time we detach it below.
+    // `restoreTreeRecursive` unbinds each window from prevRoot as it re-binds it into the new tree. Any window still
+    // under prevRoot by the time we detach it below is, by construction, not in the snapshot - it's picked up by the
+    // orphan loop below instead.
     restoreTreeRecursive(
         frozenContainer: snapshot.rootTilingNode,
         parent: workspace,
