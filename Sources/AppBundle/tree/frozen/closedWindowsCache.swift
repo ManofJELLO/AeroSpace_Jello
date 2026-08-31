@@ -54,6 +54,9 @@ struct FrozenWorkspace: Sendable {
     if !closedWindowsCache.windowIds.contains(newlyDetectedWindow.windowId) {
         return false
     }
+    // This rebinds windows across every workspace, including moving them between workspaces, which is exactly the
+    // kind of layout change that makes every macOS-fullscreen snapshot stale.
+    resetMacosFullscreenLayoutSnapshots()
     let monitors = monitorInfos
     let topLeftCornerToMonitor = monitors.grouped { $0.rect.topLeftCorner }
 
@@ -107,7 +110,7 @@ func restoreTreeRecursive(
     for child in frozenContainer.children {
         switch child {
             case .window(let w):
-                guard let window = MacWindow.get(byId: w.id), window.layoutReason == .standard else {
+                guard let window = MacWindow.get(byId: w.id), !skipUnrestorableWindows || window.layoutReason == .standard else {
                     if skipUnrestorableWindows { continue }
                     // Stop the loop if can't find the window, because otherwise all the subsequent windows will have incorrect index
                     return false

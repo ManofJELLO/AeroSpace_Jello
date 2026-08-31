@@ -70,4 +70,9 @@ func exitMacOsNativeUnconventionalState(
         case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer: // wtf case, should never be possible. But If encounter it, let's just re-layout window
             try await window.relayoutWindow(on: workspace, cm)
     }
+    // Belt-and-suspenders: `restoreMacosFullscreenLayout` already consumes the snapshot on the `.tilingContainer`
+    // branch above, but that branch is the only one that ever calls it. Drop it here too so a snapshot can never
+    // outlive the window's exit from its macOS unconventional state, no matter which branch was taken. Harmless
+    // when it was already consumed.
+    dropMacosFullscreenLayoutSnapshot(windowId: window.windowId)
 }
