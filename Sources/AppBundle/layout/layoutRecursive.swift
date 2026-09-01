@@ -148,11 +148,11 @@ extension TilingContainer {
     }
 }
 
-/// Lays `nodes` out one after another along `orientation`, dividing the available extent between them proportionally
-/// to their weights, and inserting inner gaps in between.
+/// Lays `nodes` out one after another along `orientation`, dividing the available extent between them and inserting
+/// inner gaps in between.
 ///
-/// This is the workhorse of both the `tiles` layout (called once with all children) and the `master` layout
-/// (called once per column/row group).
+/// Weights here are *absolute extents*: they are rewritten on every pass so that they sum to the available space.
+/// Only `tiles` uses this. `master` columns use ``layoutMasterColumn(_:along:_:width:height:virtual:_:)`` instead
 @MainActor
 private func layoutSequentially(
     _ nodes: [TreeNode],
@@ -197,6 +197,62 @@ private func layoutSequentially(
     }
 }
 
+/// Lays the windows of one `master` column out along `orientation`.
+///
+/// Unlike ``layoutSequentially(_:along:_:width:height:virtual:_:)``, a weight here is a *relative share* of the
+/// column rather than an absolute extent, and the layout never writes weights back. Two windows with equal shares
+/// split the column evenly no matter how tall the column is.
+///
+/// That distinction is what makes windows survive changing columns. Absolute extents can't: a window carrying a
+/// 1050pt weight from a one-window master area into a stack that divides the same 1050pt between three windows
+/// would keep the difference forever, because the normalization in `layoutSequentially` is additive and so
+/// preserves differences. Shares carry over unchanged, so a promoted or demoted window simply takes an even slice
+/// of wherever it lands. It's the same reason Hyprland stores `percSize` as a multiplier
+@MainActor
+private func layoutMasterColumn(
+    _ nodes: [TreeNode],
+    along orientation: Orientation,
+    _ point: CGPoint,
+    width: CGFloat,
+    height: CGFloat,
+    virtual: Rect,
+    _ context: LayoutContext,
+) async throws {
+    if nodes.isEmpty { return }
+    let shares = nodes.map { max($0.getWeight(orientation), MASTER_MIN_SHARE) }
+    let totalShare = shares.reduce(0, +)
+    guard totalShare > 0 else { return }
+
+    let physicalAvailable = orientation == .h ? width : height
+    let virtualAvailable = virtual.getDimension(orientation)
+    let rawGap = context.resolvedGaps.inner.get(orientation).toDouble()
+
+    var point = point
+    var virtualPoint = virtual.topLeftCorner
+    let lastIndex = nodes.indices.last
+    for (i, child) in nodes.enumerated() {
+        let fraction = shares[i] / totalShare
+        let slot = physicalAvailable * fraction
+        let virtualSlot = virtualAvailable * fraction
+        // Same gap arithmetic as the tiles layout: the slot keeps its full size, the window is inset within it
+        let gap = rawGap - (i == 0 ? rawGap / 2 : 0) - (i == lastIndex ? rawGap / 2 : 0)
+        try await child.layoutRecursive(
+            i == 0 ? point : point.addingOffset(orientation, rawGap / 2),
+            width: orientation == .h ? slot - gap : width,
+            height: orientation == .v ? slot - gap : height,
+            virtual: Rect(
+                topLeftX: virtualPoint.x,
+                topLeftY: virtualPoint.y,
+                width: orientation == .h ? virtualSlot : virtual.width,
+                height: orientation == .v ? virtualSlot : virtual.height,
+            ),
+            context,
+        )
+        virtualPoint = virtualPoint.addingOffset(orientation, virtualSlot)
+        point = point.addingOffset(orientation, slot)
+    }
+}
+
 /// One column (for `.h` orientation) or row (for `.v`) of a `master` container
 private struct MasterSlot {
     let nodes: [TreeNode]
@@ -222,7 +278,7 @@ extension TilingContainer {
                 width: axis == .h ? slot.virtualExtent : virtual.width,
                 height: axis == .v ? slot.virtualExtent : virtual.height,
             )
-            try await layoutSequentially(
+            try await layoutMasterColumn(
                 slot.nodes,
                 along: axis.opposite,
                 point.addingOffset(axis, slot.physicalOffset),

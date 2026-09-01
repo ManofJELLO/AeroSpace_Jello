@@ -192,6 +192,64 @@ final class MasterLayoutTest: XCTestCase {
         assertApproxEquals(root(name).master.fraction, 0.45)
     }
 
+    func testStackStaysEvenAfterAddingAndRemovingAMaster() async throws {
+        let (workspace, windows) = masterWorkspace(name, windowCount: 3)
+        try await workspace.layoutWorkspace()
+        assertEquals(TestWindow.focus(windows[0]), true)
+
+        // Round-tripping a window through the master area used to leave the stack permanently lopsided, because
+        // weights were absolute extents and the layout's normalization preserved the difference
+        await parseCommand("master add-master").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await workspace.layoutWorkspace()
+        assertRect(windows[0], x: 0, y: 0, width: 1056, height: screenHeight / 2)
+        assertRect(windows[1], x: 0, y: screenHeight / 2, width: 1056, height: screenHeight / 2)
+
+        await parseCommand("master remove-master").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await workspace.layoutWorkspace()
+        assertRect(windows[0], x: 0, y: 0, width: 1056, height: screenHeight)
+        assertRect(windows[1], x: 1056, y: 0, width: 864, height: screenHeight / 2)
+        assertRect(windows[2], x: 1056, y: screenHeight / 2, width: 864, height: screenHeight / 2)
+    }
+
+    func testStackStaysEvenAfterPromotingAndDemoting() async throws {
+        let (workspace, windows) = masterWorkspace(name, windowCount: 3)
+        try await workspace.layoutWorkspace()
+        assertEquals(TestWindow.focus(windows[2]), true)
+
+        await parseCommand("master swap-with-master").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await workspace.layoutWorkspace()
+        await parseCommand("master swap-with-master").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await workspace.layoutWorkspace()
+
+        assertRect(windows[1], x: 1056, y: 0, width: 864, height: screenHeight / 2)
+        assertRect(windows[2], x: 1056, y: screenHeight / 2, width: 864, height: screenHeight / 2)
+    }
+
+    func testADeliberateResizeSurvivesAColumnChange() async throws {
+        let (workspace, windows) = masterWorkspace(name, windowCount: 3)
+        try await workspace.layoutWorkspace()
+        assertEquals(TestWindow.focus(windows[1]), true)
+
+        // Make the first stack window twice the height of the second
+        await parseCommand("resize height +180").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await workspace.layoutWorkspace()
+        let tallBefore = windows[1].lastAppliedLayoutPhysicalRect.orDie().height
+
+        // Promote it and demote it again. Shares are normalized, so it comes back proportionally intact rather than
+        // carrying a pixel-scale weight into a differently sized column
+        await parseCommand("master add-master").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await workspace.layoutWorkspace()
+        await parseCommand("master remove-master").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await workspace.layoutWorkspace()
+
+        assertApproxEquals(windows[1].lastAppliedLayoutPhysicalRect.orDie().height, tallBefore)
+        assertApproxEquals(
+            windows[1].lastAppliedLayoutPhysicalRect.orDie().height
+                + windows[2].lastAppliedLayoutPhysicalRect.orDie().height,
+            screenHeight,
+        )
+    }
+
     func testBalanceSizesEvensOutEachColumn() async throws {
         let (workspace, windows) = masterWorkspace(name, windowCount: 3)
         try await workspace.layoutWorkspace()

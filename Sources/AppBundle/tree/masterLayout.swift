@@ -164,6 +164,36 @@ extension TreeNode {
     }
 }
 
+extension TilingContainer {
+    /// The on-screen sizes, in points, that `column`'s relative shares currently work out to.
+    ///
+    /// Resizing is expressed in pixels but stored as shares, so both the `resize` command and mouse resizing convert
+    /// through this. Returns `nil` before the container has been laid out even once
+    /// Writes `pixels` back as relative shares, normalized so the average share in the column is 1.
+    ///
+    /// Normalizing is what keeps shares comparable *between* columns. Without it a resized column would sit on a
+    /// pixel scale (say 740 and 340) while an untouched column sits on the unit scale (1), and promoting a window
+    /// across would hand it hundreds of times its neighbour's space
+    @MainActor
+    func setColumnShares(_ column: [TreeNode], along orientation: Orientation, fromPixelSizes pixels: [CGFloat]) {
+        let total = pixels.reduce(0, +)
+        guard total > 0, !column.isEmpty else { return }
+        let scale = CGFloat(column.count) / total
+        for (i, node) in column.enumerated() {
+            node.setWeight(orientation, max(pixels[i] * scale, MASTER_MIN_SHARE))
+        }
+    }
+
+    @MainActor
+    func columnPixelSizes(of column: [TreeNode], along orientation: Orientation) -> [CGFloat]? {
+        guard let extent = lastAppliedLayoutPhysicalRect?.getDimension(orientation), extent > 0 else { return nil }
+        let shares = column.map { max($0.getWeight(orientation), MASTER_MIN_SHARE) }
+        let total = shares.reduce(0, +)
+        guard total > 0 else { return nil }
+        return shares.map { extent * $0 / total }
+    }
+}
+
 /// Exchanges the positions of two nodes. Weights stay with the slot, not with the node, so the windows keep the sizes
 /// that were on screen before the swap.
 ///

@@ -384,6 +384,8 @@ demotes, resizes, rotates and reorients from there.
 * `move (left|right|up|down)` swaps the window with its neighbour. Across the split that promotes or demotes it.
 * `resize` along the split axis moves the boundary between the master area and the stack.
   Along the other axis it resizes the window within its column.
+  Windows share their column evenly until you resize one, and a window that is promoted or demoted keeps its
+  proportion rather than dragging a stale size into its new column.
 * Dragging a window with the mouse *inserts* it where you drop it, before or after the window under the cursor,
   and shifts the rest along.
   Dropping onto the master area therefore promotes the window to master.

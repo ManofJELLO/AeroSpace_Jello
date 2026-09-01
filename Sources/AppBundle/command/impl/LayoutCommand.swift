@@ -115,6 +115,11 @@ struct LayoutCommand: Command {
             } else {
                 parent.changeOrientation(targetOrientation)
             }
+            if enteringMaster {
+                // Weights change meaning here: 'tiles' stores absolute extents, 'master' stores relative shares.
+                // Reinterpreting pixel values as shares would put the container on a scale of its own, so start even
+                for child in parent.children { child.setWeight(parent.weightOrientation, 1) }
+            }
             return .succ
     }
 }

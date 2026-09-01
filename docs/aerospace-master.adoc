@@ -66,6 +66,8 @@ Equivalent to Hyprland's `layoutmsg rollnext` and `rollprev`.
 add-master, remove-master::
 Grow or shrink the master area by one window.
 Equivalent to `set-count +1` and `set-count -1`.
+The windows of each column re-divide it evenly, unless you have resized them, in which case their proportions are
+kept.
 
 set-count [+|-]<count>::
 Set the number of windows in the master area, or change it relative to the current value.

@@ -106,22 +106,35 @@ private func resizeMasterWithMouse(
 ) {
     let orientation = direction.orientation
     if orientation == parent.weightOrientation {
-        // Dragging along the stacking axis. Only the windows of the same column give up the space
+        // Dragging along the stacking axis. Only the windows of the same column give up the space.
+        //
+        // A master column's weights are relative shares, so every window of the column is rewritten from its
+        // drag-start pixel size. Touching only some of them would leave the column mixing pixel-scale and
+        // share-scale weights, which would blow the ratios apart
         let group = parent.masterGroup(of: node)
         guard let indexInGroup = group.firstIndex(of: node) else { return }
         let absorbing = direction.isPositive ? Array(group[(indexInGroup + 1)...]) : Array(group[..<indexInGroup])
         guard let siblingDiff = diff.div(absorbing.count) else { return }
 
+        let resized = group.map { sibling -> CGFloat in
+            let delta: CGFloat = switch true {
+                case sibling == node: diff
+                case absorbing.contains(sibling): -siblingDiff
+                default: 0
+            }
+            return sibling.getWeightBeforeResize(orientation) + delta
+        }
+        parent.setColumnShares(group, along: orientation, fromPixelSizes: resized)
+        // Nested containers between the dragged window and the column also grow. Only 'tiles' parents, which store
+        // absolute extents, are safe to nudge by a raw pixel diff
         window.parentsWithSelf.lazy
             .prefix(while: { $0 != parent })
+            .filter { $0 != node }
             .filter {
                 let parent = $0.parent as? TilingContainer
-                return parent?.weightOrientation == orientation && parent?.layout != .accordion
+                return parent?.orientation == orientation && parent?.layout == .tiles
             }
             .forEach { $0.setWeight(orientation, $0.getWeightBeforeResize(orientation) + diff) }
-        for sibling in absorbing {
-            sibling.setWeight(orientation, sibling.getWeightBeforeResize(orientation) - siblingDiff)
-        }
         return
     }
     // Dragging the boundary between the master area and the stack

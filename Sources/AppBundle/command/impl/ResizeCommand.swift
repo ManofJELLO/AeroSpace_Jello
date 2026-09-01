@@ -87,20 +87,26 @@ struct ResizeCommand: Command {
 ) -> BinaryExitCode {
     if orientation == parent.weightOrientation {
         // Resizing along the stacking axis. Only the windows of the same column give up the space, the other column
-        // is normalized independently and wouldn't notice the change anyway
+        // is laid out independently and wouldn't notice the change anyway.
+        //
+        // Weights in a master column are relative shares, so the arithmetic is done in pixels and the whole column
+        // is written back at once. Writing pixel values as shares is fine, only their ratios matter, and rewriting
+        // every window keeps them all on one scale
         let group = parent.masterGroup(of: node)
+        guard group.count > 1, let nodeIndex = group.firstIndex(of: node) else {
+            return .fail(io.err("The window is the only one in its column, there is nothing to resize it against"))
+        }
+        guard let pixels = parent.columnPixelSizes(of: group, along: orientation) else {
+            return .fail(io.err("Can't resize before the workspace has been laid out at least once"))
+        }
         let diff: CGFloat = switch units {
-            case .set(let unit): CGFloat(unit) - node.getWeight(orientation)
+            case .set(let unit): CGFloat(unit) - pixels[nodeIndex]
             case .add(let unit): CGFloat(unit)
             case .subtract(let unit): -CGFloat(unit)
         }
-        guard let siblingDiff = diff.div(group.count - 1) else {
-            return .fail(io.err("The window is the only one in its column, there is nothing to resize it against"))
-        }
-        for sibling in group where sibling != node {
-            sibling.setWeight(orientation, sibling.getWeight(orientation) - siblingDiff)
-        }
-        node.setWeight(orientation, node.getWeight(orientation) + diff)
+        let siblingDiff = diff / CGFloat(group.count - 1)
+        let resized = pixels.enumerated().map { (i, px) in px + (i == nodeIndex ? diff : -siblingDiff) }
+        parent.setColumnShares(group, along: orientation, fromPixelSizes: resized)
         return .succ
     }
 

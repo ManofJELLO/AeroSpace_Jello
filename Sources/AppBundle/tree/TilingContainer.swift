@@ -39,8 +39,9 @@ extension TilingContainer {
     ///
     /// - `tiles` stacks children along its own orientation, so weight is the extent along that axis.
     /// - `master` splits its orientation axis between the master area and the stack (that split is governed by
-    ///   ``MasterState/fraction``, not by weights), and stacks the children of each group along the *opposite* axis.
-    ///   So for `master` the weight is the extent along the opposite axis.
+    ///   ``MasterState/fraction``, not by weights), and stacks the children of each column along the *opposite* axis.
+    ///   So for `master` the weight applies to the opposite axis, and it is a *relative share* of the column rather
+    ///   than an absolute extent, so that a window keeps a sensible size when it changes column.
     /// - `accordion` doesn't use weights at all, but it reports its own orientation so that the weight of its
     ///   children stays well defined.
     @MainActor
@@ -128,6 +129,8 @@ struct MasterState: Equatable, Sendable {
 
 let MASTER_MIN_FRACTION: CGFloat = 0.05
 let MASTER_MAX_FRACTION: CGFloat = 0.95
+/// Floor for a window's share of its `master` column, so that a window can never be squeezed out of existence
+let MASTER_MIN_SHARE: CGFloat = 0.05
 
 extension TilingContainer {
     /// ``MasterState/count`` clamped to the number of children the container actually holds.
