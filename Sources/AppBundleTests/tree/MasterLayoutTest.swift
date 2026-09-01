@@ -522,6 +522,29 @@ final class MasterCommandTest: XCTestCase {
         assertNotEquals(result.exitCode.rawValue, 0)
     }
 
+    func testStartupDoesNotClobberAConfiguredMasterLayout() {
+        config.defaultRootContainerLayout = .master
+        let container = Workspace.get(byName: name).rootTilingContainer
+        container.layout = .master
+        for id in 1 ... 4 { TestWindow.new(id: UInt32(id), parent: container) }
+        assertEquals(TestWindow.new(id: 5, parent: container).focusWindow(), true)
+
+        // The startup heuristic would otherwise flip this to accordion, because there are more than 3 windows
+        smartLayoutAtStartup()
+
+        assertEquals(focus.workspace.rootTilingContainer.layout, .master)
+    }
+
+    func testStartupHeuristicStillAppliesToOtherLayouts() {
+        let container = Workspace.get(byName: name).rootTilingContainer
+        for id in 1 ... 4 { TestWindow.new(id: UInt32(id), parent: container) }
+        assertEquals(TestWindow.new(id: 5, parent: container).focusWindow(), true)
+
+        smartLayoutAtStartup()
+
+        assertEquals(focus.workspace.rootTilingContainer.layout, .accordion)
+    }
+
     func testLayoutCommandTogglesMaster() async {
         let container = Workspace.get(byName: name).rootTilingContainer
         assertEquals(TestWindow.new(id: 1, parent: container).focusWindow(), true)

@@ -47,9 +47,13 @@ import Foundation
 }
 
 @MainActor
-private func smartLayoutAtStartup() {
+func smartLayoutAtStartup() {
     let workspace = focus.workspace
     let root = workspace.rootTilingContainer
+    // The heuristic only chooses between tiles and accordion. It has nothing sensible to say about 'master', which
+    // is built to hold many windows, and running it anyway would silently undo
+    // default-root-container-layout = 'master' on every restart
+    if config.defaultRootContainerLayout == .master { return }
     switch root.children.count <= 3 {
         case true: root.layout = .tiles
         case false: root.layout = .accordion
