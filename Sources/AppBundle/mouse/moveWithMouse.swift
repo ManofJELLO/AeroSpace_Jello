@@ -36,7 +36,7 @@ private func moveWithMouse(_ window: Window) async throws { // todo cover with t
         case .macosFullscreenWindowsContainer, .macosMinimizedWindowsContainer, .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer:
             return // Unconventional windows can't be moved with mouse
         case .tilingContainer:
-            moveTilingWindow(window, cursor: mouseLocation)
+            beginTilingDrag(window)
         case .unbound: return
     }
 }
@@ -55,14 +55,32 @@ private func moveFloatingWindow(_ window: Window) async throws {
 private func moveWithMouseWouldChangeLayout(_ window: Window) -> Bool {
     switch window.windowParentCases {
         case .tilingContainer:
-            // The first event of a drag always runs. It marks the window as manipulated, which is what stops the
-            // layout from fighting the drag, and lets the other windows settle around it
-            if currentlyManipulatedWithMouseWindowId != window.windowId { return true }
-            return planTilingDrop(window, cursor: mouseLocation) != nil
+            // A tiling drag doesn't touch the tree until the button is released, so the only event that needs a
+            // session is the first one. It marks the window as manipulated, which is what stops the layout from
+            // fighting the drag, and lets the other windows settle around it
+            return currentlyManipulatedWithMouseWindowId != window.windowId
         case .floatingWindowsContainer, .macosFullscreenWindowsContainer, .macosMinimizedWindowsContainer,
              .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer, .unbound:
             return true
     }
+}
+
+/// Marks a window as being dragged. The tree is deliberately left alone until ``commitTilingDragIfNeeded(cursor:)``
+@MainActor
+func beginTilingDrag(_ window: Window) {
+    currentlyManipulatedWithMouseWindowId = window.windowId
+    currentlyDraggedWithMouseWindowId = window.windowId
+    window.lastAppliedLayoutPhysicalRect = nil
+}
+
+/// Applies a tiling drag at the position the cursor was released at. Call on mouse-up, before the manipulation state
+/// is cleared, so that the refresh it schedules lays out the result
+@MainActor
+func commitTilingDragIfNeeded(cursor: CGPoint) {
+    guard let windowId = currentlyDraggedWithMouseWindowId else { return }
+    currentlyDraggedWithMouseWindowId = nil
+    guard let window = Window.get(byId: windowId) else { return }
+    moveTilingWindow(window, cursor: cursor)
 }
 
 /// What a drop at `cursor` would do to the tree, or `nil` if it would leave it untouched

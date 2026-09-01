@@ -19,6 +19,7 @@ func setUpWorkspacesForTests() {
     // A test that exercises a mouse drag leaves this set, and layoutRecursive skips laying out the window it names.
     // The next test would then see a window that never gets a rect
     currentlyManipulatedWithMouseWindowId = nil
+    currentlyDraggedWithMouseWindowId = nil
     config = defaultConfig
     configUrl = defaultConfigUrl
     config.enableNormalizationFlattenContainers = false // Make layout tests more predictable

@@ -723,6 +723,31 @@ final class MasterMouseDropTest: XCTestCase {
                      .h_master([.window(3), .window(1), .window(2), .v_tiles([])]))
     }
 
+    func testADragBackToWhereItStartedChangesNothing() async throws {
+        let (workspace, windows) = try await stackWorkspace()
+        let before = workspace.rootTilingContainer.layoutDescription
+
+        // The tree isn't touched while the drag is in flight, so wandering over the master area and back again
+        // leaves nothing behind. windows[1]'s own slot no longer reports a rect while it is being dragged, so the
+        // cursor finds no drop target there
+        beginTilingDrag(windows[1])
+        commitTilingDragIfNeeded(cursor: CGPoint(x: 1500, y: 200))
+
+        assertEquals(workspace.rootTilingContainer.layoutDescription, before)
+    }
+
+    func testTheDragIsAppliedWhereTheCursorIsReleased() async throws {
+        let (workspace, windows) = try await stackWorkspace()
+
+        beginTilingDrag(windows[3])
+        // Only the release position matters, so a quick flick lands the same as a slow drag
+        commitTilingDragIfNeeded(cursor: CGPoint(x: 500, y: 100))
+
+        assertEquals(workspace.rootTilingContainer.layoutDescription,
+                     .h_master([.window(4), .window(1), .window(2), .window(3)]))
+        assertNil(currentlyDraggedWithMouseWindowId)
+    }
+
     func testNonMasterContainersStillSwap() async throws {
         let workspace = focus.workspace
         let container = workspace.rootTilingContainer

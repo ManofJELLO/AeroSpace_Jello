@@ -59,6 +59,9 @@ enum GlobalObserver {
             //  The end of the callback calls refreshSession
             Task.startUnstructured { @MainActor in
                 guard let token: RunSessionGuard = .isServerEnabled else { return }
+                // Apply the drag before the manipulation state is cleared: resetManipulatedWithMouseIfPossible
+                // schedules the refresh that lays the result out
+                commitTilingDragIfNeeded(cursor: mouseLocation)
                 try await resetManipulatedWithMouseIfPossible()
                 let mouseLocation = mouseLocation
                 let clickedMonitor = mouseLocation.monitorApproximation

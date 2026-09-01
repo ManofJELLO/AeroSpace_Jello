@@ -389,6 +389,7 @@ demotes, resizes, rotates and reorients from there.
 * Dragging a window with the mouse *inserts* it where you drop it, before or after the window under the cursor,
   and shifts the rest along.
   Dropping onto the master area therefore promotes the window to master.
+  The layout only changes when you release the button, so dragging somewhere and back again cancels the move.
   This mirrors Hyprland's `drop_at_cursor`, and differs from `tiles` and `accordion`, where a drag swaps the dragged
   window with the one underneath it.
 * xref:commands.adoc#master[`master`] does everything master-specific: `swap-with-master`, `focus-master`,
