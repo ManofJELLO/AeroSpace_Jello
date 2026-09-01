@@ -230,7 +230,11 @@ private func unbindAndGetBindingDataForNewTilingWindow(_ workspace: Workspace, w
         return BindingData(
             parent: tilingParent,
             adaptiveWeight: WEIGHT_AUTO,
-            index: mruWindow.ownIndex.orDie() + 1,
+            // A master container decides where new windows land via 'master.new-window-position'. Every other layout
+            // puts them right after the most recently focused window
+            index: tilingParent.layout == .master
+                ? tilingParent.newWindowIndex(afterFocused: mruWindow)
+                : mruWindow.ownIndex.orDie() + 1,
         )
     } else {
         return BindingData(

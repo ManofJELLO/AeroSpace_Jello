@@ -5,12 +5,26 @@ extension Workspace {
         let containers = children.filterIsInstance(of: TilingContainer.self)
         switch containers.count {
             case 0:
-                let orientation: Orientation = switch config.defaultRootContainerOrientation {
-                    case .horizontal: .h
-                    case .vertical: .v
-                    case .auto: workspaceMonitor.then { $0.width >= $0.height } ? .h : .v
+                let layout = config.defaultRootContainerLayout
+                // A master container's orientation is one half of its MasterOrientation ('left' means horizontal
+                // split with the master on the left), so 'master.orientation' wins over the generic setting
+                let orientation: Orientation = if layout == .master {
+                    config.master.orientation.axis
+                } else {
+                    switch config.defaultRootContainerOrientation {
+                        case .horizontal: .h
+                        case .vertical: .v
+                        case .auto: workspaceMonitor.then { $0.width >= $0.height } ? .h : .v
+                    }
                 }
-                return TilingContainer(parent: self, adaptiveWeight: 1, orientation, config.defaultRootContainerLayout, index: INDEX_BIND_LAST)
+                return TilingContainer(
+                    parent: self,
+                    adaptiveWeight: 1,
+                    orientation,
+                    layout,
+                    index: INDEX_BIND_LAST,
+                    master: .fromConfig,
+                )
             case 1:
                 return containers.singleOrNil().orDie()
             default:

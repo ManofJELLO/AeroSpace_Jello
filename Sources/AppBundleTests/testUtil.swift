@@ -16,6 +16,9 @@ let projectRoot: URL = {
 @MainActor
 func setUpWorkspacesForTests() {
     resetMacosFullscreenLayoutSnapshots() // Prevent snapshots leaking from one test into the next, see 14511cd2
+    // A test that exercises a mouse drag leaves this set, and layoutRecursive skips laying out the window it names.
+    // The next test would then see a window that never gets a rect
+    currentlyManipulatedWithMouseWindowId = nil
     config = defaultConfig
     configUrl = defaultConfigUrl
     config.enableNormalizationFlattenContainers = false // Make layout tests more predictable

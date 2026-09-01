@@ -1,0 +1,134 @@
+= aerospace-master(1)
+include::util/man-attributes.adoc[]
+:manname: aerospace-master
+// tag::purpose[]
+:manpurpose: Manipulate the master area of a master layout container
+// end::purpose[]
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+aerospace master [-h|--help] [--window-id <window-id>|--workspace <workspace>]
+                 (swap-with-master|focus-master|rotate-next|rotate-prev|add-master|remove-master)
+aerospace master [-h|--help] [--window-id <window-id>|--workspace <workspace>]
+                 set-count [+|-]<count>
+aerospace master [-h|--help] [--window-id <window-id>|--workspace <workspace>]
+                 set-fraction [+|-]<percent>
+aerospace master [-h|--help] [--window-id <window-id>|--workspace <workspace>]
+                 set-orientation (left|right|top|bottom|center|next|prev)
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+{manpurpose}
+
+The command operates on the innermost `master` container that the target window belongs to.
+If the target window is not inside a `master` container, the command falls back to the workspace tiling root
+node, and fails if that node isn't a `master` container either.
+
+See: xref:guide.adoc#master-layout[the layouts guide] for what the master layout is,
+and xref:aerospace-layout.adoc[`layout`] for switching a container into it.
+
+// =========================================================== Options
+include::./util/conditional-options-header.adoc[]
+
+-h, --help:: Print help
+
+--window-id <window-id>::
+include::./util/window-id-flag-desc.adoc[]
+
+--workspace <workspace>::
+include::./util/workspace-flag-desc.adoc[]
+
+// =========================================================== Arguments
+include::./util/conditional-arguments-header.adoc[]
+
+swap-with-master::
+Exchange the focused window with the most recently focused window of the master area.
+If the focused window already is a master, it is exchanged with the most recently focused window of the stack,
+which makes the argument toggle back and forth.
+
+focus-master::
+Focus the most recently focused window of the master area.
+If the focused window already is a master, focus returns to the most recently focused window of the stack.
+
+rotate-next, rotate-prev::
+Shift every window of the container one slot forward or backward, wrapping around.
+A different window ends up in the master area, and the slots keep their sizes.
+Focus stays on the master area rather than following the window that moved out of it, so repeating the command flips
+through the windows in the master spot.
+Equivalent to Hyprland's `layoutmsg rollnext` and `rollprev`.
+
+add-master, remove-master::
+Grow or shrink the master area by one window.
+Equivalent to `set-count +1` and `set-count -1`.
+
+set-count [+|-]<count>::
+Set the number of windows in the master area, or change it relative to the current value.
+The value is clamped to `1 .. <number of windows in the container>`.
+
+set-fraction [+|-]<percent>::
+Set the percentage of the container that the master area takes, or change it relative to the current value.
+The value is clamped to `5 .. 95`.
++
+With `center` orientation, the two stack columns split whatever the master area leaves behind.
+
+set-orientation (left|right|top|bottom|center|next|prev)::
+Move the master area to the given side of the container.
+`next` and `prev` walk the `left -> top -> right -> bottom -> center` cycle, clockwise,
+the same cycle as Hyprland's `orientationnext` and `orientationprev`.
++
+`center` needs at least `master.center-stack-threshold` stack windows to take effect.
+Below that the container is laid out as `master.center-fallback` instead.
+
+// =========================================================== Examples
+include::./util/conditional-examples-header.adoc[]
+
+* Promote the focused window to master (and press it again to go back): +
+`aerospace master swap-with-master`
+
+* Widen the master area by 5% of the screen: +
+`aerospace master set-fraction +5`
+
+* Two windows side by side in the master area, the rest in the stack: +
+`aerospace master set-count 2`
+
+* Cycle the master area through the sides of the screen: +
+`aerospace master set-orientation next`
+
+// =========================================================== Notes
+== Notes
+
+Hyprland's `layoutmsg` counterparts that AeroSpace already covers with general purpose commands:
+
+[cols="1,1"]
+|===
+|Hyprland |AeroSpace
+
+|`layoutmsg cyclenext` / `cycleprev`
+|`focus dfs-next` / `focus dfs-prev`
+
+|`layoutmsg swapnext` / `swapprev`
+|`swap dfs-next` / `swap dfs-prev`
+
+|`layoutmsg mfact`
+|`master set-fraction`, or `resize smart` / `resize width`
+
+|`layoutmsg rollnext` / `rollprev`
+|`master rotate-next` / `master rotate-prev`
+
+|`master:new_status`, `master:new_on_top`
+|`master.new-window-position` in the config
+
+|`master:drop_at_cursor` (always on inside a master container)
+|Dragging a window with the mouse
+|===
+
+// end::body[]
+
+// =========================================================== Footer
+include::./util/man-footer.adoc[]

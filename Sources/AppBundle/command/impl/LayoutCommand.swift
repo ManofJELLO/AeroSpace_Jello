@@ -49,10 +49,16 @@ struct LayoutCommand: Command {
                 return changeTilingLayout(io, targetLayout: .tiles, targetOrientation: .h, node: node)
             case .v_tiles:
                 return changeTilingLayout(io, targetLayout: .tiles, targetOrientation: .v, node: node)
+            case .h_master:
+                return changeTilingLayout(io, targetLayout: .master, targetOrientation: .h, node: node)
+            case .v_master:
+                return changeTilingLayout(io, targetLayout: .master, targetOrientation: .v, node: node)
             case .accordion:
                 return changeTilingLayout(io, targetLayout: .accordion, targetOrientation: nil, node: node)
             case .tiles:
                 return changeTilingLayout(io, targetLayout: .tiles, targetOrientation: nil, node: node)
+            case .master:
+                return changeTilingLayout(io, targetLayout: .master, targetOrientation: nil, node: node)
             case .horizontal:
                 return changeTilingLayout(io, targetLayout: nil, targetOrientation: .h, node: node)
             case .vertical:
@@ -92,10 +98,23 @@ struct LayoutCommand: Command {
         case .floatingWindowsContainer:
             return .fail(io.err("The window is non-tiling"))
         case .tilingContainer(let parent):
-            let targetOrientation = targetOrientation ?? parent.orientation
             let targetLayout = targetLayout ?? parent.layout
+            let enteringMaster = targetLayout == .master && parent.layout != .master
+            if enteringMaster {
+                // Seed the container from the config the first time it becomes a master container. Afterwards the
+                // 'master' command owns these values, and toggling back and forth preserves them
+                parent.master = MasterState.fromConfig
+            }
             parent.layout = targetLayout
-            parent.changeOrientation(targetOrientation)
+            // A master container owns its orientation: it is one half of its MasterOrientation. Propagating the
+            // orientation to the parents (which changeOrientation does) would flip the layout of unrelated containers
+            let targetOrientation = targetOrientation
+                ?? (enteringMaster ? config.master.orientation.axis : parent.orientation)
+            if targetLayout == .master {
+                parent.setOrientationDirectly(targetOrientation)
+            } else {
+                parent.changeOrientation(targetOrientation)
+            }
             return .succ
     }
 }
@@ -105,12 +124,15 @@ extension ConventionalWindowParentCases {
         return switch layout {
             case .accordion:   tilingContainerOrNil?.layout == .accordion
             case .tiles:       tilingContainerOrNil?.layout == .tiles
+            case .master:      tilingContainerOrNil?.layout == .master
             case .horizontal:  tilingContainerOrNil?.orientation == .h
             case .vertical:    tilingContainerOrNil?.orientation == .v
             case .h_accordion: tilingContainerOrNil.map { $0.layout == .accordion && $0.orientation == .h } == true
             case .v_accordion: tilingContainerOrNil.map { $0.layout == .accordion && $0.orientation == .v } == true
             case .h_tiles:     tilingContainerOrNil.map { $0.layout == .tiles && $0.orientation == .h } == true
             case .v_tiles:     tilingContainerOrNil.map { $0.layout == .tiles && $0.orientation == .v } == true
+            case .h_master:    tilingContainerOrNil.map { $0.layout == .master && $0.orientation == .h } == true
+            case .v_master:    tilingContainerOrNil.map { $0.layout == .master && $0.orientation == .v } == true
             case .tiling:      tilingContainerOrNil != nil
             case .floating:    floatingWindowsContainerOrNil != nil
         }

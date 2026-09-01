@@ -46,6 +46,7 @@ struct Config: ConvenienceMutable {
     var automaticallyUnhideMacosHiddenApps: Bool = false
     var preserveLayoutOnMacosNativeFullscreen: Bool = true
     var accordionPadding: Int = 30
+    var master: MasterConfig = MasterConfig()
     var enableNormalizationOppositeOrientationForNestedContainers: Bool = true
     var persistentWorkspaces: OrderedSet<String> = []
     var execOnWorkspaceChange: [String] = [] // todo deprecate
@@ -66,6 +67,42 @@ struct Config: ConvenienceMutable {
 
 struct FocusFollowsMouse: ConvenienceMutable {
     var enabled: Bool = false
+}
+
+/// Defaults for the `master` layout. See https://nikitabobko.github.io/AeroSpace/guide#layouts
+///
+/// These values seed newly created `master` containers. Once a container exists, the `master` command changes it
+/// directly, and the container keeps its own values until the config is reloaded
+struct MasterConfig: ConvenienceMutable, Equatable, Sendable {
+    /// Where the master area sits. Also decides the container orientation
+    var orientation: MasterOrientation = .left
+    /// How many windows the master area holds
+    var count: Int = 1
+    /// How much of the container the master area takes, in percent.
+    /// An integer because TOML floats aren't supported by the config parser
+    var fractionPercent: Int = 55
+    /// `center` orientation needs at least this many stack windows before it kicks in.
+    /// Mirrors Hyprland's `slave_count_for_center_master`, including that `0` means "always center"
+    var centerStackThreshold: Int = 2
+    /// Which side `center` falls back to when there are fewer stack windows than `centerStackThreshold`.
+    /// Mirrors Hyprland's `center_master_fallback`. Never `center`
+    var centerFallback: MasterOrientation = .left
+    /// Where a newly detected window is inserted into a `master` container
+    var newWindowPosition: MasterNewWindowPosition = .stackEnd
+
+    var fraction: CGFloat { (CGFloat(fractionPercent) / 100).coerceIn(MASTER_MIN_FRACTION ... MASTER_MAX_FRACTION) }
+}
+
+enum MasterNewWindowPosition: String, CaseIterable, Equatable, Sendable {
+    /// The new window becomes the master, the previous master is pushed to the top of the stack
+    case master
+    /// The new window is inserted at the top of the stack
+    case stackStart = "stack-start"
+    /// The new window is appended at the bottom of the stack
+    case stackEnd = "stack-end"
+    /// The new window is inserted right after the most recently focused window, in whichever group it lives.
+    /// This is what non-master layouts do
+    case afterFocused = "after-focused"
 }
 
 enum ConfigVersion: Int, Comparable, CaseIterable, Sendable, CustomStringConvertible {

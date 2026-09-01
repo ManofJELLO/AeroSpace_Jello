@@ -104,6 +104,7 @@ func restoreTreeRecursive(
         frozenContainer.orientation,
         frozenContainer.layout,
         index: index,
+        master: frozenContainer.master,
     )
 
     var childIndex = 0

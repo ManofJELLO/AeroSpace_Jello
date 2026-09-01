@@ -1,4 +1,5 @@
 import AppKit
+import Common
 
 extension Workspace {
     @MainActor
@@ -48,6 +49,8 @@ extension TreeNode {
                         try await container.layoutTiles(point, width: width, height: height, virtual: virtual, context)
                     case .accordion:
                         try await container.layoutAccordion(point, width: width, height: height, virtual: virtual, context)
+                    case .master:
+                        try await container.layoutMaster(point, width: width, height: height, virtual: virtual, context)
                 }
             case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
                  .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer:
@@ -107,37 +110,7 @@ extension Window {
 extension TilingContainer {
     @MainActor
     fileprivate func layoutTiles(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
-        var point = point
-        var virtualPoint = virtual.topLeftCorner
-
-        guard let delta = ((orientation == .h ? width : height) - CGFloat(children.sumOfDouble { $0.getWeight(orientation) }))
-            .div(children.count) else { return }
-
-        let lastIndex = children.indices.last
-        for (i, child) in children.enumerated() {
-            child.setWeight(orientation, child.getWeight(orientation) + delta)
-            let rawGap = context.resolvedGaps.inner.get(orientation).toDouble()
-            // Gaps. Consider 4 cases:
-            // 1. Multiple children. Layout first child
-            // 2. Multiple children. Layout last child
-            // 3. Multiple children. Layout child in the middle
-            // 4. Single child   let rawGap = gaps.inner.get(orientation).toDouble()
-            let gap = rawGap - (i == 0 ? rawGap / 2 : 0) - (i == lastIndex ? rawGap / 2 : 0)
-            try await child.layoutRecursive(
-                i == 0 ? point : point.addingOffset(orientation, rawGap / 2),
-                width: orientation == .h ? child.hWeight - gap : width,
-                height: orientation == .v ? child.vWeight - gap : height,
-                virtual: Rect(
-                    topLeftX: virtualPoint.x,
-                    topLeftY: virtualPoint.y,
-                    width: orientation == .h ? child.hWeight : width,
-                    height: orientation == .v ? child.vWeight : height,
-                ),
-                context,
-            )
-            virtualPoint = orientation == .h ? virtualPoint.addingXOffset(child.hWeight) : virtualPoint.addingYOffset(child.vWeight)
-            point = orientation == .h ? point.addingXOffset(child.hWeight) : point.addingYOffset(child.vWeight)
-        }
+        try await layoutSequentially(children, along: orientation, point, width: width, height: height, virtual: virtual, context)
     }
 
     @MainActor
@@ -172,5 +145,138 @@ extension TilingContainer {
                     )
             }
         }
+    }
+}
+
+/// Lays `nodes` out one after another along `orientation`, dividing the available extent between them proportionally
+/// to their weights, and inserting inner gaps in between.
+///
+/// This is the workhorse of both the `tiles` layout (called once with all children) and the `master` layout
+/// (called once per column/row group).
+@MainActor
+private func layoutSequentially(
+    _ nodes: [TreeNode],
+    along orientation: Orientation,
+    _ point: CGPoint,
+    width: CGFloat,
+    height: CGFloat,
+    virtual: Rect,
+    _ context: LayoutContext,
+) async throws {
+    var point = point
+    var virtualPoint = virtual.topLeftCorner
+
+    guard let delta = ((orientation == .h ? width : height) - CGFloat(nodes.sumOfDouble { $0.getWeight(orientation) }))
+        .div(nodes.count) else { return }
+
+    let lastIndex = nodes.indices.last
+    for (i, child) in nodes.enumerated() {
+        child.setWeight(orientation, child.getWeight(orientation) + delta)
+        let weight = child.getWeight(orientation)
+        let rawGap = context.resolvedGaps.inner.get(orientation).toDouble()
+        // Gaps. Consider 4 cases:
+        // 1. Multiple children. Layout first child
+        // 2. Multiple children. Layout last child
+        // 3. Multiple children. Layout child in the middle
+        // 4. Single child
+        let gap = rawGap - (i == 0 ? rawGap / 2 : 0) - (i == lastIndex ? rawGap / 2 : 0)
+        try await child.layoutRecursive(
+            i == 0 ? point : point.addingOffset(orientation, rawGap / 2),
+            width: orientation == .h ? weight - gap : width,
+            height: orientation == .v ? weight - gap : height,
+            virtual: Rect(
+                topLeftX: virtualPoint.x,
+                topLeftY: virtualPoint.y,
+                width: orientation == .h ? weight : width,
+                height: orientation == .v ? weight : height,
+            ),
+            context,
+        )
+        virtualPoint = orientation == .h ? virtualPoint.addingXOffset(weight) : virtualPoint.addingYOffset(weight)
+        point = orientation == .h ? point.addingXOffset(weight) : point.addingYOffset(weight)
+    }
+}
+
+/// One column (for `.h` orientation) or row (for `.v`) of a `master` container
+private struct MasterSlot {
+    let nodes: [TreeNode]
+    /// Offset from the container's top left corner along the container's orientation axis
+    let physicalOffset: CGFloat
+    let physicalExtent: CGFloat
+    let virtualOffset: CGFloat
+    let virtualExtent: CGFloat
+}
+
+extension TilingContainer {
+    @MainActor
+    fileprivate func layoutMaster(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
+        let axis = effectiveOrientation
+        let physicalExtent = axis == .h ? width : height
+        let virtualExtent = virtual.getDimension(axis)
+        let gap = context.resolvedGaps.inner.get(axis).toDouble()
+
+        for slot in masterSlots(physicalExtent: physicalExtent, virtualExtent: virtualExtent, gap: gap) {
+            let slotVirtual = Rect(
+                topLeftX: axis == .h ? virtual.topLeftX + slot.virtualOffset : virtual.topLeftX,
+                topLeftY: axis == .v ? virtual.topLeftY + slot.virtualOffset : virtual.topLeftY,
+                width: axis == .h ? slot.virtualExtent : virtual.width,
+                height: axis == .v ? slot.virtualExtent : virtual.height,
+            )
+            try await layoutSequentially(
+                slot.nodes,
+                along: axis.opposite,
+                point.addingOffset(axis, slot.physicalOffset),
+                width: axis == .h ? slot.physicalExtent : width,
+                height: axis == .v ? slot.physicalExtent : height,
+                virtual: slotVirtual,
+                context,
+            )
+        }
+    }
+
+    /// Splits the container's extent along its orientation axis between the columns of ``orderedMasterGroups``.
+    ///
+    /// The master area takes ``MasterState/fraction`` of the space, and the remaining column(s) share what is left.
+    /// How each column then divides its own slot among its windows is left to ``layoutSequentially``, which uses the
+    /// per-window weights.
+    @MainActor
+    private func masterSlots(physicalExtent: CGFloat, virtualExtent: CGFloat, gap: CGFloat) -> [MasterSlot] {
+        let groups = orderedMasterGroups
+        if groups.isEmpty { return [] }
+        // Only one column is populated: it owns the whole container and there is nothing to split
+        if groups.count == 1 {
+            return [MasterSlot(
+                nodes: groups[0].nodes,
+                physicalOffset: 0,
+                physicalExtent: physicalExtent,
+                virtualOffset: 0,
+                virtualExtent: virtualExtent,
+            )]
+        }
+        let fraction = master.fraction.coerceIn(MASTER_MIN_FRACTION ... MASTER_MAX_FRACTION)
+        let stackColumns = CGFloat(groups.count - 1)
+        let physicalAvailable = max(0, physicalExtent - stackColumns * gap)
+        let physicalMaster = physicalAvailable * fraction
+        let physicalStack = (physicalAvailable - physicalMaster) / stackColumns
+        let virtualMaster = virtualExtent * fraction
+        let virtualStack = (virtualExtent - virtualMaster) / stackColumns
+
+        var slots: [MasterSlot] = []
+        var physicalOffset: CGFloat = 0
+        var virtualOffset: CGFloat = 0
+        for group in groups {
+            let physical = group.isMasterArea ? physicalMaster : physicalStack
+            let virtual = group.isMasterArea ? virtualMaster : virtualStack
+            slots.append(MasterSlot(
+                nodes: group.nodes,
+                physicalOffset: physicalOffset,
+                physicalExtent: physical,
+                virtualOffset: virtualOffset,
+                virtualExtent: virtual,
+            ))
+            physicalOffset += physical + gap
+            virtualOffset += virtual
+        }
+        return slots
     }
 }

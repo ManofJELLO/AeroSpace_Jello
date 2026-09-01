@@ -605,6 +605,63 @@ final class ConfigTest: XCTestCase {
         )
     }
 
+    func testParseMasterConfig() {
+        let result = parseConfig(
+            """
+            [master]
+            orientation = 'center'
+            count = 2
+            fraction = 40
+            center-stack-threshold = 0
+            center-fallback = 'right'
+            new-window-position = 'master'
+            """,
+        )
+        assertEquals(result.errors, [])
+        assertEquals(result.config.master.orientation, .center)
+        assertEquals(result.config.master.count, 2)
+        assertEquals(result.config.master.fractionPercent, 40)
+        assertEquals(result.config.master.centerStackThreshold, 0)
+        assertEquals(result.config.master.centerFallback, .right)
+        assertEquals(result.config.master.newWindowPosition, .master)
+    }
+
+    func testParseMasterConfigDefaults() {
+        let result = parseConfig("")
+        assertEquals(result.config.master.orientation, .left)
+        assertEquals(result.config.master.count, 1)
+        assertEquals(result.config.master.fraction, 0.55)
+        assertEquals(result.config.master.centerStackThreshold, 2)
+        assertEquals(result.config.master.centerFallback, .left)
+        assertEquals(result.config.master.newWindowPosition, .stackEnd)
+    }
+
+    func testParseMasterConfigErrors() {
+        assertEquals(
+            parseConfig("master.orientation = 'diagonal'").strErrors,
+            ["[ERROR] master.orientation: Can't parse master orientation 'diagonal'. " +
+                "Possible values: (left|right|top|bottom|center)"],
+        )
+        assertEquals(
+            parseConfig("master.count = 0").strErrors,
+            ["[ERROR] master.count: master.count must be a positive number"],
+        )
+        assertEquals(
+            parseConfig("master.fraction = 120").strErrors,
+            ["[ERROR] master.fraction: master.fraction is a percentage. It must be in [5, 95] range"],
+        )
+        assertEquals(
+            parseConfig("master.center-fallback = 'center'").strErrors,
+            ["[ERROR] master.center-fallback: Can't parse master center fallback. " +
+                "Possible values: (left|right|top|bottom)"],
+        )
+        assertEquals(
+            parseConfig("master.new-window-position = 'nowhere'").strErrors,
+            ["[ERROR] master.new-window-position: Can't parse master new window position 'nowhere'. " +
+                "Possible values: (master|stack-start|stack-end|after-focused)"],
+        )
+    }
+
     func testParseDefaultRootContainerOrientation() {
         let result = parseConfig(
             """

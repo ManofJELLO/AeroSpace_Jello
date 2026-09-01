@@ -181,6 +181,13 @@ include::aerospace-macos-native-minimize.adoc[tags=synopsis]
 include::aerospace-macos-native-minimize.adoc[tags=purpose]
 include::aerospace-macos-native-minimize.adoc[tags=body]
 
+== master
+----
+include::aerospace-master.adoc[tags=synopsis]
+----
+include::aerospace-master.adoc[tags=purpose]
+include::aerospace-master.adoc[tags=body]
+
 == mode
 ----
 include::aerospace-mode.adoc[tags=synopsis]

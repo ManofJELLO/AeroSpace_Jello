@@ -104,6 +104,16 @@ let macos_native_fullscreen_help_generated = """
 let macos_native_minimize_help_generated = """
     USAGE: macos-native-minimize [-h|--help] [--window-id <window-id>]
     """
+let master_help_generated = """
+    USAGE: master [-h|--help] [--window-id <window-id>|--workspace <workspace>]
+                  (swap-with-master|focus-master|rotate-next|rotate-prev|add-master|remove-master)
+       OR: master [-h|--help] [--window-id <window-id>|--workspace <workspace>]
+                  set-count [+|-]<count>
+       OR: master [-h|--help] [--window-id <window-id>|--workspace <workspace>]
+                  set-fraction [+|-]<percent>
+       OR: master [-h|--help] [--window-id <window-id>|--workspace <workspace>]
+                  set-orientation (left|right|top|bottom|center|next|prev)
+    """
 let mode_help_generated = """
     USAGE: mode [-h|--help] [--] <binding-mode>
     """

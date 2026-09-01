@@ -25,8 +25,8 @@ struct FocusCommand: Command {
         switch args.target {
             case .direction(let direction):
                 let window = target.windowOrNil
-                if let (parent, ownIndex) = window?.closestParent(hasChildrenInDirection: direction, withLayout: nil) {
-                    guard let windowToFocus = parent.children[ownIndex + direction.focusOffset]
+                if let neighbour = window?.closestTilingNeighbour(inDirection: direction) {
+                    guard let windowToFocus = neighbour
                         .findLeafWindowRecursive(snappedTo: direction.opposite) else { return .fail(io.err(bugPrompt())) }
                     return .from(bool: windowToFocus.focusWindow())
                 } else {
@@ -141,8 +141,10 @@ struct FocusCommand: Command {
             guard let _tilingParent = target.parent as? TilingContainer else { continue }
             tilingParent = _tilingParent
             index = switch tilingParent.layout {
-                case .tiles:
-                    center.getProjection(tilingParent.orientation) >= targetCenter.getProjection(tilingParent.orientation)
+                // 'master' children are ordered along the axis they are stacked on, which is the opposite of the
+                // container orientation. weightOrientation gives the right axis for both layouts
+                case .tiles, .master:
+                    center.getProjection(tilingParent.weightOrientation) >= targetCenter.getProjection(tilingParent.weightOrientation)
                         ? target.ownIndex.orDie() + 1
                         : target.ownIndex.orDie()
                 case .accordion:
@@ -200,6 +202,20 @@ extension TreeNode {
                 return workspace.rootTilingContainer.findLeafWindowRecursive(snappedTo: direction)
             case .window(let window):
                 return window
+            case .tilingContainer(let container) where container.layout == .master:
+                let groups = container.orderedMasterGroups
+                if direction.orientation == container.effectiveOrientation {
+                    // Snap to the outermost column, then to whichever of its windows was focused last
+                    let nodes = (direction.isPositive ? groups.last : groups.first)?.nodes ?? []
+                    return container.mruChild(among: nodes)?.findLeafWindowRecursive(snappedTo: direction)
+                } else {
+                    // Snap within the column that holds the most recently focused window
+                    let mru = container.mostRecentChild
+                    let nodes = groups.first(where: { group in mru.map { group.nodes.contains($0) } == true })?.nodes
+                        ?? groups.first?.nodes
+                        ?? []
+                    return (direction.isPositive ? nodes.last : nodes.first)?.findLeafWindowRecursive(snappedTo: direction)
+                }
             case .tilingContainer(let container):
                 if direction.orientation == container.orientation {
                     return (direction.isPositive ? container.children.last : container.children.first)?

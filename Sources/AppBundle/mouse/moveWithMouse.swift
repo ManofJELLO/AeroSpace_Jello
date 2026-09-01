@@ -33,7 +33,7 @@ private func moveWithMouse(_ window: Window) async throws { // todo cover with t
         case .macosFullscreenWindowsContainer, .macosMinimizedWindowsContainer, .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer:
             return // Unconventional windows can't be moved with mouse
         case .tilingContainer:
-            moveTilingWindow(window)
+            moveTilingWindow(window, cursor: mouseLocation)
         case .unbound: return
     }
 }
@@ -47,42 +47,65 @@ private func moveFloatingWindow(_ window: Window) async throws {
     }
 }
 
+/// `cursor` is a parameter rather than read from ``mouseLocation`` so that the drop logic can be tested
 @MainActor
-private func moveTilingWindow(_ window: Window) {
+func moveTilingWindow(_ window: Window, cursor: CGPoint) {
     currentlyManipulatedWithMouseWindowId = window.windowId
     window.lastAppliedLayoutPhysicalRect = nil
-    let mouseLocation = mouseLocation
-    let targetWorkspace = mouseLocation.monitorApproximation.activeWorkspace
-    let swapTarget = mouseLocation
+    let targetWorkspace = cursor.monitorApproximation.activeWorkspace
+    let dropTarget = cursor
         .findWindowRecursively(in: targetWorkspace.rootTilingContainer, virtual: false, fullscreenCoversAll: false)?
         .takeIf { $0 != window }
     if targetWorkspace != window.nodeWorkspace { // Move window to a different monitor
-        let index: Int = if let swapTarget, let parent = swapTarget.parent as? TilingContainer, let targetRect = swapTarget.lastAppliedLayoutPhysicalRect {
-            mouseLocation.getProjection(parent.orientation) >= targetRect.center.getProjection(parent.orientation)
-                ? swapTarget.ownIndex.orDie() + 1
-                : swapTarget.ownIndex.orDie()
+        let index: Int = if let dropTarget, let parent = dropTarget.parent as? TilingContainer, let targetRect = dropTarget.lastAppliedLayoutPhysicalRect {
+            // weightOrientation is the axis along which the parent orders its children. It differs from 'orientation'
+            // for master containers, whose children are stacked across the master/stack split
+            cursor.getProjection(parent.weightOrientation) >= targetRect.center.getProjection(parent.weightOrientation)
+                ? dropTarget.ownIndex.orDie() + 1
+                : dropTarget.ownIndex.orDie()
         } else {
             0
         }
         window.bind(
-            to: swapTarget?.parent ?? targetWorkspace.rootTilingContainer,
+            to: dropTarget?.parent ?? targetWorkspace.rootTilingContainer,
             adaptiveWeight: WEIGHT_AUTO,
             index: index,
         )
-    } else if let swapTarget {
-        swapWindows(mruDominant: window, swapTarget)
+    } else if let dropTarget {
+        // A 'master' container is an ordered list of slots rather than a spatial tree, so dropping into one inserts
+        // the window at the cursor and shifts the rest along, the way Hyprland's 'drop_at_cursor' does. Every other
+        // layout keeps AeroSpace's "swap with the window underneath" behavior
+        if let masterParent = (dropTarget.parent as? TilingContainer)?.takeIf({ $0.layout == .master }) {
+            dropIntoMasterContainer(window, onto: dropTarget, in: masterParent, cursor: cursor)
+        } else {
+            swapTreeNodes(mruDominant: window, dropTarget)
+        }
     }
 }
 
+/// Inserts `window` next to `target`, before or after it depending on which side of `target`'s midpoint the cursor
+/// sits on. Dropping onto the master area therefore promotes the window to master and pushes the rest down
 @MainActor
-func swapWindows(mruDominant window1: Window, _ window2: Window) {
-    if window1 == window2 { return }
-
-    let binding2 = window2.unbindFromParent()
-    let binding1 = window1.unbindFromParent()
-
-    window2.bind(to: binding1.parent, adaptiveWeight: binding1.adaptiveWeight, index: binding1.index)
-    window1.bind(to: binding2.parent, adaptiveWeight: binding2.adaptiveWeight, index: binding2.index)
+private func dropIntoMasterContainer(_ window: Window, onto target: Window, in parent: TilingContainer, cursor: CGPoint) {
+    guard let targetRect = target.lastAppliedLayoutPhysicalRect, let targetIndex = target.ownIndex else {
+        swapTreeNodes(mruDominant: window, target)
+        return
+    }
+    let axis = parent.weightOrientation
+    var index = cursor.getProjection(axis) > targetRect.center.getProjection(axis) ? targetIndex + 1 : targetIndex
+    let cameFromTheSameContainer = window.parent === parent
+    if cameFromTheSameContainer, let sourceIndex = window.ownIndex {
+        // The window is about to leave this very list, so every slot past it shifts down by one
+        if index > sourceIndex { index -= 1 }
+        // Already where it would land. Bailing out keeps the drag from thrashing the layout every mouse event
+        if index == sourceIndex { return }
+    }
+    let binding = window.unbindFromParent()
+    window.bind(
+        to: parent,
+        adaptiveWeight: cameFromTheSameContainer ? binding.adaptiveWeight : WEIGHT_AUTO,
+        index: index,
+    )
 }
 
 extension CGPoint {
@@ -104,7 +127,7 @@ extension CGPoint {
     private func _findWindowRecursively(in tree: TilingContainer, virtual: Bool) -> Window? {
         let point = self
         let target: TreeNode? = switch tree.layout {
-            case .tiles:
+            case .tiles, .master:
                 tree.children.first(where: {
                     (virtual ? $0.lastAppliedLayoutVirtualRect : $0.lastAppliedLayoutPhysicalRect)?.contains(point) == true
                 })

@@ -296,7 +296,7 @@ WARNING: i3 has a different terminology.
 * Each container can contain arbitrary number of children nodes
 * Windows are the only possible leaf nodes. Windows contain zero children nodes
 * Every container has two properties:
-. <<layouts,Layout>> (Possible values: `tiles`, `accordion`)
+. <<layouts,Layout>> (Possible values: `tiles`, `accordion`, `master`)
 . Orientation (Possible values: `horizontal`, `vertical`)
 
 When we say "layout of the window", we refer to the layout of the window’s parent container.
@@ -323,12 +323,14 @@ The tree structure can be changed with three commands:
 [#layouts]
 === Layouts
 
-In total, AeroSpace provides 4 possible layouts:
+In total, AeroSpace provides 6 possible layouts:
 
 - `h_tiles` horizontal tiles (in i3, it’s called "horizontal split")
 - `v_tiles` vertical tiles (in i3, it’s called "vertical split")
 - `h_accordion` horizontal accordion (analog of i3’s "tabbed layout")
 - `v_accordion` vertical accordion (analog of i3’s "stacked layout")
+- `h_master` horizontal master (analog of Hyprland’s master layout with `left`/`right`/`center` orientation)
+- `v_master` vertical master (analog of Hyprland’s master layout with `top`/`bottom` orientation)
 
 <<tree,From the previous section>>, you’re already familiar with the `tiles` layout.
 
@@ -349,6 +351,71 @@ You can navigate the windows in an `h_accordion` by using the `focus (left|right
 While in a `v_accordion`, you can navigate the windows using the `focus (up|down)` command.
 
 Accordion padding is configurable via `accordion-padding` option.
+
+[#master-layout]
+==== Master
+
+`master` is a dynamic layout modelled after
+https://wiki.hyprland.org/Configuring/Dwindle-Master-Layouts/#master[Hyprland’s master layout] (and, before that,
+after dwm and xmonad). A `master` container splits its children into two groups:
+
+* The *master area* holds the first `count` windows. It takes `fraction` of the container.
+* The *stack* holds everything else, and shares whatever the master area leaves behind.
+
+The windows of each group are stacked across the split, so with the master area on the left, master windows are
+stacked vertically in the left column and stack windows are stacked vertically in the right column.
+
+....
+master.orientation = 'left'          master.orientation = 'center'
++----------+-------------+           +------+------------+------+
+|          |     S1      |           |  S1  |            |  S2  |
+|          +-------------+           +------+     M      +------+
+|    M     |     S2      |           |  S3  |            |  S4  |
+|          +-------------+           +------+            +------+
+|          |     S3      |           |  S5  |            |      |
++----------+-------------+           +------+------------+------+
+....
+
+Unlike `tiles`, the layout is *dynamic*: you never build the tree by hand. Opening a window puts it into the stack
+(configurable, see `master.new-window-position`), and the xref:commands.adoc#master[master] command promotes,
+demotes, resizes, rotates and reorients from there.
+
+* `focus (left|right|up|down)` moves within a column, and crosses between the master area and the stack.
+* `move (left|right|up|down)` swaps the window with its neighbour. Across the split that promotes or demotes it.
+* `resize` along the split axis moves the boundary between the master area and the stack.
+  Along the other axis it resizes the window within its column.
+* Dragging a window with the mouse *inserts* it where you drop it, before or after the window under the cursor,
+  and shifts the rest along.
+  Dropping onto the master area therefore promotes the window to master.
+  This mirrors Hyprland's `drop_at_cursor`, and differs from `tiles` and `accordion`, where a drag swaps the dragged
+  window with the one underneath it.
+* xref:commands.adoc#master[`master`] does everything master-specific: `swap-with-master`, `focus-master`,
+  `add-master`, `remove-master`, `set-count`, `set-fraction`, `set-orientation`, `rotate-next`, `rotate-prev`.
+
+Defaults for new `master` containers come from the `[master]` config table:
+
+[source,toml]
+----
+default-root-container-layout = 'master'
+
+[master]
+orientation = 'left'              # left|right|top|bottom|center
+count = 1                         # windows in the master area
+fraction = 55                     # percent of the container taken by the master area, 5..95
+center-stack-threshold = 2        # stack windows 'center' needs before it takes effect. 0 means always
+center-fallback = 'left'          # what 'center' is laid out as below that threshold. left|right|top|bottom
+new-window-position = 'stack-end' # master|stack-start|stack-end|after-focused
+----
+
+`center-stack-threshold` and `center-fallback` mirror Hyprland's `slave_count_for_center_master` and
+`center_master_fallback`, including that a threshold of `0` centers the master area unconditionally.
+When only one of the two flanking columns has a window in it, the other one is left empty so that the master area
+stays centered.
+Because `center-fallback` names a whole orientation, falling back to `top` or `bottom` flips the split axis, not just
+the side.
+
+NOTE: When `default-root-container-layout = 'master'`, the container orientation comes from `master.orientation`
+(`left` and `right` are horizontal, `top` and `bottom` are vertical), not from `default-root-container-orientation`.
 
 [#normalization]
 === Normalization

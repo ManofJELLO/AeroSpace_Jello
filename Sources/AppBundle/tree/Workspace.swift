@@ -65,6 +65,7 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         workspaceMonitor.visibleRectPaddedByOuterGaps.getDimension(targetOrientation)
     }
 
+    @MainActor
     override func setWeight(_ targetOrientation: Orientation, _ newValue: CGFloat) {
         die("It's not possible to change weight of Workspace")
     }

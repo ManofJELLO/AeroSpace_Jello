@@ -20,6 +20,14 @@ struct MoveCommand: Command {
         }
         switch currentWindow.windowParentCases {
             case .unbound: return .fail
+            case .tilingContainer(let parent) where parent.layout == .master:
+                // In a master container windows occupy ordered slots rather than a spatial subtree, so a move is a
+                // swap with the neighbouring slot. Along the master/stack axis that promotes or demotes the window
+                guard let neighbour = parent.masterNeighbour(of: currentWindow, inDirection: direction, crossColumn: .sameRow) else {
+                    return moveOut(tilingWindow: currentWindow, direction: direction, io, args, env)
+                }
+                swapTreeNodes(mruDominant: currentWindow, neighbour)
+                return .succ
             case .tilingContainer(let parent):
                 guard let indexOfCurrent = currentWindow.ownIndex else { return .fail(io.err(bugPrompt())) }
                 let indexOfSiblingTarget = indexOfCurrent + direction.focusOffset
@@ -105,6 +113,8 @@ private let moveOutMacosUnconventionalWindow = "moving macOS fullscreen, minimiz
 ) -> BinaryExitCode {
     let innerMostTilingContainer = window.parents.first(where: {
         return switch $0.parent?.cases {
+            case .tilingContainer(let parent) where parent.layout == .master:
+                parent.masterNeighbour(of: $0, inDirection: direction, crossColumn: .sameRow) != nil
             case .tilingContainer(let parent): parent.orientation == direction.orientation
             // Stop searching: we have hit the workspace
             case nil, .workspace: true
@@ -120,7 +130,7 @@ private let moveOutMacosUnconventionalWindow = "moving macOS fullscreen, minimiz
     switch innerMostTilingContainer.tilingContainerParentCases {
         case .unbound: return .fail
         case .tilingContainer(let parent):
-            check(parent.orientation == direction.orientation)
+            check(parent.layout == .master || parent.orientation == direction.orientation)
             guard let ownIndex = innerMostTilingContainer.ownIndex else { return .fail(io.err(bugPrompt())) }
             window.bind(to: parent, adaptiveWeight: WEIGHT_AUTO, index: ownIndex + direction.insertionOffset)
             return .succ

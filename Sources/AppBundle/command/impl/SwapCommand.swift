@@ -17,9 +17,9 @@ struct SwapCommand: Command {
         let targetWindow: Window?
         switch args.target.val {
             case .direction(let direction):
-                switch currentWindow.closestParent(hasChildrenInDirection: direction, withLayout: nil) {
-                    case let (parent, ownIndex)?:
-                        targetWindow = parent.children[ownIndex + direction.focusOffset].findLeafWindowRecursive(snappedTo: direction.opposite)
+                switch currentWindow.closestTilingNeighbour(inDirection: direction) {
+                    case let neighbour?:
+                        targetWindow = neighbour.findLeafWindowRecursive(snappedTo: direction.opposite)
                     case nil where args.wrapAround:
                         targetWindow = target.workspace.findLeafWindowRecursive(snappedTo: direction.opposite)
                     case nil:
@@ -47,7 +47,7 @@ struct SwapCommand: Command {
             return .fail
         }
 
-        swapWindows(mruDominant: currentWindow, targetWindow)
+        swapTreeNodes(mruDominant: currentWindow, targetWindow)
 
         if args.swapFocus {
             return .from(bool: targetWindow.focusWindow())

@@ -11,6 +11,7 @@ struct FrozenContainer: Sendable {
     let layout: Layout
     let orientation: Orientation
     let weight: CGFloat
+    let master: MasterState
 
     @MainActor init(_ container: TilingContainer) {
         children = container.children.map {
@@ -29,6 +30,7 @@ struct FrozenContainer: Sendable {
         layout = container.layout
         orientation = container.orientation
         weight = getWeightOrNil(container) ?? 1
+        master = container.master
     }
 }
 
@@ -43,5 +45,5 @@ struct FrozenWindow: Sendable {
 }
 
 @MainActor private func getWeightOrNil(_ node: TreeNode) -> CGFloat? {
-    ((node.parent as? TilingContainer)?.orientation).map { node.getWeight($0) }
+    ((node.parent as? TilingContainer)?.weightOrientation).map { node.getWeight($0) }
 }

@@ -11,15 +11,16 @@ struct JoinWithCommand: Command {
         guard let currentWindow = target.windowOrNil else {
             return .fail(io.err(noWindowIsFocused))
         }
-        guard let (parent, ownIndex) = currentWindow.closestParent(hasChildrenInDirection: direction, withLayout: nil) else {
+        guard let joinWithTarget = currentWindow.closestTilingNeighbour(inDirection: direction) else {
             return .fail(io.err("No windows in the specified direction"))
         }
-        let joinWithTarget = parent.children[ownIndex + direction.focusOffset]
+        guard let parent = joinWithTarget.parent as? TilingContainer else { return .fail(io.err(bugPrompt())) }
         let prevBinding = joinWithTarget.unbindFromParent()
         let newParent = TilingContainer(
             parent: parent,
             adaptiveWeight: prevBinding.adaptiveWeight,
-            parent.orientation.opposite,
+            // Perpendicular to the axis the parent orders its children along, so the two joined windows split the slot
+            parent.weightOrientation.opposite,
             .tiles,
             index: prevBinding.index,
         )

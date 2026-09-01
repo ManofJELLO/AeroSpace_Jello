@@ -27,6 +27,15 @@ final class TestWindow: Window, CustomStringConvertible {
         TestApp.shared.focusedWindow = self
     }
 
+    override func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) {
+        _rect = Rect(
+            topLeftX: topLeft?.x ?? _rect?.topLeftX ?? 0,
+            topLeftY: topLeft?.y ?? _rect?.topLeftY ?? 0,
+            width: size?.width ?? _rect?.width ?? 0,
+            height: size?.height ?? _rect?.height ?? 0,
+        )
+    }
+
     override func closeAxWindow() {
         unbindFromParent()
     }

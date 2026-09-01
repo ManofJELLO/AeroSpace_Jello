@@ -17,7 +17,9 @@ struct BalanceSizesCommand: Command {
 private func balance(_ parent: TilingContainer) {
     for child in parent.children {
         switch parent.layout {
-            case .tiles: child.setWeight(parent.orientation, 1)
+            // For 'master' this evens out the windows within the master area and within the stack. The split between
+            // the two areas is governed by 'master.fraction', not by weights, so it is left untouched
+            case .tiles, .master: child.setWeight(parent.weightOrientation, 1)
             case .accordion: break // Do nothing
         }
         if let child = child as? TilingContainer {

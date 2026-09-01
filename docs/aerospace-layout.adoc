@@ -46,10 +46,15 @@ include::./util/conditional-arguments-header.adoc[]
 <target-layout>::
 Possible values:
 +
-* `h_tiles|v_tiles|h_accordion|v_accordion` - Change both tiling layout and orientation in one go
-* `tiles|accordion` - Change tiling layout but preserve orientation
+* `h_tiles|v_tiles|h_accordion|v_accordion|h_master|v_master` - Change both tiling layout and orientation in one go
+* `tiles|accordion|master` - Change tiling layout but preserve orientation
 * `horizontal|vertical` - Change orientation but preserve layout
 * `tiling|floating` - Toggle between floating/tiling mode
++
+The first time a container becomes a `master` container, it is seeded from the `[master]` config table, and
+`master` (without an explicit orientation) also adopts `master.orientation`.
+Afterwards the xref:aerospace-master.adoc[`master`] command owns those values, and toggling the layout back and
+forth preserves them.
 +
 If several `<target-layout>` are supplied, then the first one that doesn't describe the currently active layout is applied.
 
@@ -67,6 +72,9 @@ include::./util/conditional-examples-header.adoc[]
 
 * Switch to `tiles` layout. Toggle the layout orientation if already in `tiles` layout: +
 `aerospace layout tiles horizontal vertical`
+
+* Toggle between the i3-style `tiles` layout and the Hyprland-style `master` layout: +
+`aerospace layout tiles master`
 
 // end::body[]
 

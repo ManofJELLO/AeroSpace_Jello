@@ -147,6 +147,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     "automatically-unhide-macos-hidden-apps": Parser(\.automaticallyUnhideMacosHiddenApps, parseBool),
     "preserve-layout-on-macos-native-fullscreen": Parser(\.preserveLayoutOnMacosNativeFullscreen, parseBool),
     "accordion-padding": Parser(\.accordionPadding, parseInt),
+    "master": Parser(\.master, parseMasterConfig),
     persistentWorkspacesKey: Parser(\.persistentWorkspaces, parsePersistentWorkspaces),
     "exec-on-workspace-change": Parser(\.execOnWorkspaceChange, parseArrayOfStrings),
     "exec": Parser(\.execConfig, parseExecConfig),
@@ -384,6 +385,56 @@ private func parseStartupRootContainerLayout(_ raw: OrderedJson, _ backtrace: Co
     parseString(raw, backtrace)
         .filter(.init(backtrace, "'non-empty-workspaces-root-containers-layout-on-startup' is deprecated. Please drop it from your config")) { raw in raw == "smart" }
         .map { _ in () }
+}
+
+private let masterConfigParser: [String: any ParserProtocol<MasterConfig>] = [
+    "orientation": Parser(\.orientation, parseMasterOrientation),
+    "count": Parser(\.count, parseMasterCount),
+    "fraction": Parser(\.fractionPercent, parseMasterFractionPercent),
+    "center-stack-threshold": Parser(\.centerStackThreshold, parseCenterStackThreshold),
+    "center-fallback": Parser(\.centerFallback, parseCenterFallback),
+    "new-window-position": Parser(\.newWindowPosition, parseMasterNewWindowPosition),
+]
+
+private func parseMasterConfig(_ raw: OrderedJson, _ backtrace: ConfigBacktrace, _ c: inout ConfigParserContext) -> MasterConfig {
+    parseTable(raw, MasterConfig(), masterConfigParser, backtrace, &c)
+}
+
+private func parseMasterOrientation(_ raw: OrderedJson, _ backtrace: ConfigBacktrace) -> ResOrConfigParseDiagnostic<MasterOrientation> {
+    parseString(raw, backtrace).flatMap {
+        MasterOrientation(rawValue: $0)
+            .toResult(.init(backtrace, "Can't parse master orientation '\($0)'. Possible values: \(MasterOrientation.unionLiteral)"))
+    }
+}
+
+private func parseMasterCount(_ raw: OrderedJson, _ backtrace: ConfigBacktrace) -> ResOrConfigParseDiagnostic<Int> {
+    parseInt(raw, backtrace)
+        .filter(.init(backtrace, "master.count must be a positive number")) { $0 >= 1 }
+}
+
+private func parseMasterFractionPercent(_ raw: OrderedJson, _ backtrace: ConfigBacktrace) -> ResOrConfigParseDiagnostic<Int> {
+    let msg = "master.fraction is a percentage. It must be in [\(Int(MASTER_MIN_FRACTION * 100)), \(Int(MASTER_MAX_FRACTION * 100))] range"
+    return parseInt(raw, backtrace)
+        .filter(.init(backtrace, msg)) { (Int(MASTER_MIN_FRACTION * 100) ... Int(MASTER_MAX_FRACTION * 100)).contains($0) }
+}
+
+private func parseCenterStackThreshold(_ raw: OrderedJson, _ backtrace: ConfigBacktrace) -> ResOrConfigParseDiagnostic<Int> {
+    parseInt(raw, backtrace)
+        .filter(.init(backtrace, "master.center-stack-threshold can't be negative")) { $0 >= 0 }
+}
+
+private func parseCenterFallback(_ raw: OrderedJson, _ backtrace: ConfigBacktrace) -> ResOrConfigParseDiagnostic<MasterOrientation> {
+    let msg = "Can't parse master center fallback. Possible values: \(MasterOrientation.fallbacks.map(\.rawValue).joinedCliArgs)"
+    return parseString(raw, backtrace)
+        .flatMap { MasterOrientation(rawValue: $0).toResult(.init(backtrace, msg)) }
+        .filter(.init(backtrace, msg)) { MasterOrientation.fallbacks.contains($0) }
+}
+
+private func parseMasterNewWindowPosition(_ raw: OrderedJson, _ backtrace: ConfigBacktrace) -> ResOrConfigParseDiagnostic<MasterNewWindowPosition> {
+    parseString(raw, backtrace).flatMap {
+        MasterNewWindowPosition(rawValue: $0)
+            .toResult(.init(backtrace, "Can't parse master new window position '\($0)'. Possible values: \(MasterNewWindowPosition.unionLiteral)"))
+    }
 }
 
 private func parseLayout(_ raw: OrderedJson, _ backtrace: ConfigBacktrace) -> ResOrConfigParseDiagnostic<Layout> {
