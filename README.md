@@ -13,6 +13,113 @@ Docs:
 - [AeroSpace Commands](https://nikitabobko.github.io/AeroSpace/commands)
 - [AeroSpace Goodies](https://nikitabobko.github.io/AeroSpace/goodies)
 
+> [!NOTE]
+> This is a fork of [nikitabobko/AeroSpace](https://github.com/nikitabobko/AeroSpace) with two additions that are not
+> upstream: a [Hyprland-style master layout](#master-layout) and
+> [tiled-layout restore across macOS native fullscreen](#tiled-layout-survives-macos-native-fullscreen).
+> Everything else tracks upstream, so the upstream guide, commands reference and config all still apply.
+> Note that the hosted docs linked above describe upstream, not this fork - the fork additions are documented in
+> [`docs/`](./docs) in this repository.
+
+## Fork additions
+
+Install this fork from the personal tap (the upstream cask installs upstream AeroSpace, without these additions):
+
+```
+brew install --cask ManofJELLO/tap/aerospace-jello
+```
+
+The fork is built by [`release.sh`](./release.sh), which skips man page and shell completion generation, so those
+aren't included.
+
+### Master layout
+
+A dynamic master/stack layout modelled after
+[Hyprland's master layout](https://wiki.hyprland.org/Configuring/Dwindle-Master-Layouts/#master), available as a third
+layout alongside `tiles` and `accordion`.
+A `master` container splits its children into a *master area* holding the first `count` windows, and a *stack* holding
+everything else.
+Each group is stacked across the split, and the master area takes `fraction` of the container.
+
+```
+master.orientation = 'left'          master.orientation = 'center'
++----------+-------------+           +------+------------+------+
+|          |     S1      |           |  S1  |            |  S2  |
+|          +-------------+           +------+     M      +------+
+|    M     |     S2      |           |  S3  |            |  S4  |
+|          +-------------+           +------+            +------+
+|          |     S3      |           |  S5  |            |      |
++----------+-------------+           +------+------------+------+
+```
+
+Unlike `tiles`, you never build the tree by hand.
+Opening a window puts it into the stack, and everything else is driven from the keyboard:
+
+| Command | What it does |
+| --- | --- |
+| `layout master`, `layout h_master`, `layout v_master` | Switch a container into the master layout |
+| `master swap-with-master` | Promote the focused window to master. Press again to go back |
+| `master focus-master` | Focus the master. Press again to return to the stack |
+| `master add-master`, `master remove-master`, `master set-count` | Resize the master area by window count. `set-count` takes `2`, `+1` or `-1` |
+| `master set-fraction` | Move the boundary between the master area and the stack. Takes a percent: `60`, `+5`, `-5` |
+| `master set-orientation` | Move the master area to another side: `left`, `right`, `top`, `bottom`, `center`, `next`, `prev` |
+| `master rotate-next`, `master rotate-prev` | Shift every window one slot, so a different one becomes master. Focus stays on the master spot |
+
+The general purpose commands work inside a master container too.
+`focus` moves within a column and crosses between the master area and the stack, `move` swaps a window with its
+neighbour (promoting or demoting it across the split), and `resize` along the split axis moves the master/stack
+boundary, as does dragging that boundary with the mouse.
+
+Dragging a window with the mouse inserts it where you drop it and shifts the rest along, so dropping onto the master
+area promotes the window to master. That matches Hyprland's `drop_at_cursor`; `tiles` and `accordion` keep
+AeroSpace's usual behavior of swapping the dragged window with the one underneath.
+
+Defaults for new master containers come from the `[master]` config table:
+
+```toml
+default-root-container-layout = 'master'
+
+[master]
+orientation = 'left'              # left|right|top|bottom|center
+count = 1                         # windows in the master area
+fraction = 55                     # percent of the container taken by the master area, 5..95
+center-stack-threshold = 2        # stack windows 'center' needs before it takes effect. 0 means always
+center-fallback = 'left'          # what 'center' is laid out as below that threshold. left|right|top|bottom
+new-window-position = 'stack-end' # master|stack-start|stack-end|after-focused
+```
+
+These match Hyprland's defaults one for one (`mfact 0.55`, `orientation left`, `new_status slave`,
+`slave_count_for_center_master 2`, `center_master_fallback left`).
+
+`fraction` is an integer percent rather than a `0.55`-style float because the config parser has no float type.
+
+Full documentation: [`docs/guide.adoc`](./docs/guide.adoc) (Layouts section) and
+[`docs/aerospace-master.adoc`](./docs/aerospace-master.adoc), which also maps every Hyprland `layoutmsg` to its
+AeroSpace equivalent.
+
+### Tiled layout survives macOS native fullscreen
+
+When a window enters macOS native fullscreen it leaves the tiling tree for its own macOS Space.
+Upstream then has nothing to put it back into, so on exit the window is simply tiled in next to the most recently
+focused window, which can reshuffle the workspace.
+
+This fork snapshots the workspace's tiling tree when the window leaves, and restores it when the window comes back.
+The window returns to the slot and size it left, its siblings keep theirs, and their most-recently-used order is
+preserved too.
+
+The snapshot is discarded once a layout-changing command runs, or a window is moved or resized with the mouse.
+When that happens, exiting fullscreen falls back to the upstream behavior.
+Windows that open while the app is fullscreen aren't in the snapshot, so they get tiled in alongside the restored
+layout; windows that close are left out of it.
+
+Enabled by default. Set it to `false` for the upstream behavior:
+
+```toml
+preserve-layout-on-macos-native-fullscreen = false
+```
+
+Full documentation: [`docs/guide.adoc`](./docs/guide.adoc) (macOS native fullscreen section).
+
 ## Key features
 
 - Tiling window manager based on a [tree paradigm](https://nikitabobko.github.io/AeroSpace/guide#tree)
@@ -31,6 +138,11 @@ Install via [Homebrew](https://brew.sh/) to get autoupdates (Preferred)
 ```
 brew install --cask nikitabobko/tap/aerospace
 ```
+
+> [!NOTE]
+> The instructions in this section install **upstream** AeroSpace, which doesn't include the
+> [fork additions](#fork-additions). To install this fork instead, use
+> `brew install --cask ManofJELLO/tap/aerospace-jello`.
 
 In multi-monitor setup please make sure that monitors [are properly arranged](https://nikitabobko.github.io/AeroSpace/guide#proper-monitor-arrangement).
 

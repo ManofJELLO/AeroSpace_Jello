@@ -194,7 +194,12 @@ step "Creating GitHub release $tag"
 gh release create "$tag" ".release/$zip_name" \
     --repo "$REPO" \
     --title "$tag" \
-    --notes "Fork of AeroSpace that preserves the tiled layout across macOS native fullscreen.
+    --notes "Fork of AeroSpace with two additions that are not upstream:
+
+- A Hyprland-style \`master\` layout, with the \`master\` command to drive it.
+- The tiled layout is preserved across macOS native fullscreen.
+
+See the README for details.
 
 Built from commit $(git rev-parse HEAD).
 Ad-hoc signed, universal binary (arm64 + x86_64).
