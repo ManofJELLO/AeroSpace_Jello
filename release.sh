@@ -198,6 +198,7 @@ gh release create "$tag" ".release/$zip_name" \
 
 - A Hyprland-style \`master\` layout, with the \`master\` command to drive it.
 - The tiled layout is preserved across macOS native fullscreen.
+- Focus-follows-mouse with a delay, a disable key, and focus-without-raise.
 
 See the README for details.
 

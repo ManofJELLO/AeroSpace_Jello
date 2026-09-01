@@ -14,9 +14,10 @@ Docs:
 - [AeroSpace Goodies](https://nikitabobko.github.io/AeroSpace/goodies)
 
 > [!NOTE]
-> This is a fork of [nikitabobko/AeroSpace](https://github.com/nikitabobko/AeroSpace) with two additions that are not
-> upstream: a [Hyprland-style master layout](#master-layout) and
-> [tiled-layout restore across macOS native fullscreen](#tiled-layout-survives-macos-native-fullscreen).
+> This is a fork of [nikitabobko/AeroSpace](https://github.com/nikitabobko/AeroSpace) with three additions that are
+> not upstream: a [Hyprland-style master layout](#master-layout),
+> [tiled-layout restore across macOS native fullscreen](#tiled-layout-survives-macos-native-fullscreen), and
+> [focus-follows-mouse with a delay, a disable key, and focus-without-raise](#focus-follows-mouse-that-can-replace-autoraise).
 > Everything else tracks upstream, so the upstream guide, commands reference and config all still apply.
 > Note that the hosted docs linked above describe upstream, not this fork - the fork additions are documented in
 > [`docs/`](./docs) in this repository.
@@ -121,6 +122,27 @@ preserve-layout-on-macos-native-fullscreen = false
 ```
 
 Full documentation: [`docs/guide.adoc`](./docs/guide.adoc) (macOS native fullscreen section).
+
+### Focus-follows-mouse that can replace AutoRaise
+
+Upstream's `focus-follows-mouse` is a single on/off switch that focuses *and* raises the window under the pointer,
+the instant the pointer touches it. That's usually too eager, which is why people reach for
+[AutoRaise](https://github.com/sbmpost/AutoRaise) instead. Three options close the gap:
+
+```toml
+focus-follows-mouse.enabled = true
+focus-follows-mouse.delay-ms = 50      # pointer must rest this long before focus moves. 0 = immediate
+focus-follows-mouse.raise = false      # move keyboard focus without pulling the window to the front
+focus-follows-mouse.disable-key = 'control'  # hold to suspend. none|control|option|command|shift
+```
+
+These map onto AutoRaise's `focusDelay`, `delay` (where `0` means "focus but never raise"), and `disableKey`.
+Defaults are unchanged, so an existing config behaves exactly as before.
+
+`delay-ms` costs nothing to implement because every mouse move already cancels the previous one's work, so the
+delay simply becomes "the pointer stopped here". AeroSpace is event-driven rather than polling, so AutoRaise's
+`pollMillis`, `mouseDelta` and `requireMouseStop` have no equivalent and don't need one. `warpX`/`warpY` is already
+covered by `on-focus-changed = ['move-mouse window-lazy-center']`.
 
 ## Key features
 

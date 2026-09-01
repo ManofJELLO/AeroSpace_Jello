@@ -110,8 +110,8 @@ final class MacWindow: Window {
     override func isMacosFullscreen(_ cm: CancellationMode) async throws -> Bool { try await macApp.isMacosNativeFullscreen(windowId, cm) == true }
     override func isMacosMinimized(_ cm: CancellationMode) async throws -> Bool { try await macApp.isMacosNativeMinimized(windowId, cm) == true }
 
-    @MainActor override func nativeFocus() {
-        macApp.nativeFocus(windowId)
+    @MainActor override func nativeFocus(raise: Bool) {
+        macApp.nativeFocus(windowId, raise: raise)
     }
 
     override func closeAxWindow() {

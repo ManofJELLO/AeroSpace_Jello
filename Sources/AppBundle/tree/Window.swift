@@ -35,7 +35,10 @@ open class Window: TreeNode, Hashable {
     func isMacosFullscreen(_ cm: CancellationMode) async throws -> Bool { false }
     func isMacosMinimized(_ cm: CancellationMode) async throws -> Bool { false } // todo replace with enum MacOsWindowNativeState { normal, fullscreen, invisible }
     var isHiddenInCorner: Bool { die("Not implemented") }
-    @MainActor func nativeFocus() { die("Not implemented") }
+    @MainActor func nativeFocus() { nativeFocus(raise: true) }
+    /// `raise: false` gives the window keyboard focus without pulling it in front of its app's other windows.
+    /// Used by focus-follows-mouse, where raising on hover is usually unwanted
+    @MainActor func nativeFocus(raise: Bool) { die("Not implemented") }
     func getAxRect(_ cm: CancellationMode) async throws -> Rect? { die("Not implemented") }
     func getCenter(_ cm: CancellationMode) async throws -> CGPoint? { try await getAxRect(cm)?.center }
 

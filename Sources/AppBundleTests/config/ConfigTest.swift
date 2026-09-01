@@ -605,6 +605,44 @@ final class ConfigTest: XCTestCase {
         )
     }
 
+    func testParseFocusFollowsMouse() {
+        let result = parseConfig(
+            """
+            [focus-follows-mouse]
+            enabled = true
+            delay-ms = 50
+            raise = false
+            disable-key = 'control'
+            """,
+        )
+        assertEquals(result.errors, [])
+        assertEquals(result.config.focusFollowsMouse.enabled, true)
+        assertEquals(result.config.focusFollowsMouse.delayMs, 50)
+        assertEquals(result.config.focusFollowsMouse.raise, false)
+        assertEquals(result.config.focusFollowsMouse.disableKey, .control)
+    }
+
+    func testParseFocusFollowsMouseDefaults() {
+        let result = parseConfig("")
+        assertEquals(result.config.focusFollowsMouse.enabled, false)
+        assertEquals(result.config.focusFollowsMouse.delayMs, 0)
+        // Unchanged from before these options existed: focus-follows-mouse used to always raise
+        assertEquals(result.config.focusFollowsMouse.raise, true)
+        assertEquals(result.config.focusFollowsMouse.disableKey, .none)
+    }
+
+    func testParseFocusFollowsMouseErrors() {
+        assertEquals(
+            parseConfig("focus-follows-mouse.delay-ms = -1").strErrors,
+            ["[ERROR] focus-follows-mouse.delay-ms: focus-follows-mouse.delay-ms can't be negative"],
+        )
+        assertEquals(
+            parseConfig("focus-follows-mouse.disable-key = 'hyper'").strErrors,
+            ["[ERROR] focus-follows-mouse.disable-key: Can't parse focus-follows-mouse.disable-key. " +
+                "Possible values: (none|control|option|command|shift)"],
+        )
+    }
+
     func testParseMasterConfig() {
         let result = parseConfig(
             """

@@ -24,6 +24,16 @@ import AppKit
         focusFollowsTask = Task.startUnstructured { @MainActor in
             guard let token: RunSessionGuard = .isServerEnabled else { return }
             try checkCancellation()
+            let settings = config.focusFollowsMouse
+            // Every mouse move cancels the task the previous one started, so sleeping here is all it takes to make
+            // the pointer have to rest before focus moves. Sweeping across a window on the way somewhere else never
+            // gets far enough to focus it
+            if settings.delayMs > 0 {
+                try await Task.sleep(for: .milliseconds(settings.delayMs))
+                try checkCancellation()
+            }
+            // Checked after the delay, so releasing the key doesn't retroactively focus whatever you passed over
+            if settings.disableKey.isHeld { return }
             // Ignores macOS menubar dropdown, but, unfortunately, it doesn't ignore non-native menu-like fake windows.
             // todo: It would be cool to somehow reuse isWindowHeuristic logic here
             if await isAxWindowUnderMouse(location) == false { return }
@@ -45,7 +55,7 @@ import AppKit
             if let window {
                 try await runLightSession(.focusFollowsMouse, token) {
                     _ = window.focusWindow()
-                    window.nativeFocus()
+                    window.nativeFocus(raise: settings.raise)
                 }
             }
         }

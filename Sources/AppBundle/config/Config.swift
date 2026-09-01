@@ -70,6 +70,32 @@ struct Config: ConvenienceMutable {
 
 struct FocusFollowsMouse: ConvenienceMutable {
     var enabled: Bool = false
+    /// How long the pointer has to rest over a window before it takes focus. `0` focuses on the first mouse move.
+    /// Equivalent to AutoRaise's `focusDelay`, but in milliseconds rather than poll ticks
+    var delayMs: Int = 0
+    /// Whether the window is also pulled in front of its app's other windows. Equivalent to AutoRaise's `delay`,
+    /// where `0` means "focus but never raise"
+    var raise: Bool = true
+    /// Hold this modifier to suspend focus-follows-mouse. Equivalent to AutoRaise's `disableKey`
+    var disableKey: FocusFollowsMouseDisableKey = .none
+}
+
+enum FocusFollowsMouseDisableKey: String, CaseIterable, Equatable, Sendable {
+    case none, control, option, command, shift
+}
+
+extension FocusFollowsMouseDisableKey {
+    private var modifier: NSEvent.ModifierFlags? {
+        switch self {
+            case .none: nil
+            case .control: .control
+            case .option: .option
+            case .command: .command
+            case .shift: .shift
+        }
+    }
+
+    var isHeld: Bool { modifier.map { NSEvent.modifierFlags.contains($0) } ?? false }
 }
 
 /// Defaults for the `master` layout. See https://nikitabobko.github.io/AeroSpace/guide#layouts
