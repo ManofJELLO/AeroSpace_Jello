@@ -13,10 +13,13 @@ func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableR
             scheduleCancellableCompleteRefreshSession(.ax(notif))
             return
         }
+        // Most events of a drag land inside the slot the window already occupies. Running a session for those costs
+        // two AX round-trips and a re-layout of every window, to end up exactly where we started
+        guard moveWithMouseWouldChangeLayout(window) else { return }
         moveWithMouseTask?.cancel()
         moveWithMouseTask = Task.startUnstructured {
             try checkCancellation()
-            try await runLightSession(.ax(notif), token) {
+            try await runLightSession(.ax(notif), token, scheduleCompleteRefresh: false) {
                 try await moveWithMouse(window)
             }
         }
@@ -47,11 +50,43 @@ private func moveFloatingWindow(_ window: Window) async throws {
     }
 }
 
+/// Whether this mouse event has anything to do, checked before paying for a whole refresh session
+@MainActor
+private func moveWithMouseWouldChangeLayout(_ window: Window) -> Bool {
+    switch window.windowParentCases {
+        case .tilingContainer:
+            // The first event of a drag always runs. It marks the window as manipulated, which is what stops the
+            // layout from fighting the drag, and lets the other windows settle around it
+            if currentlyManipulatedWithMouseWindowId != window.windowId { return true }
+            return planTilingDrop(window, cursor: mouseLocation) != nil
+        case .floatingWindowsContainer, .macosFullscreenWindowsContainer, .macosMinimizedWindowsContainer,
+             .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer, .unbound:
+            return true
+    }
+}
+
+/// What a drop at `cursor` would do to the tree, or `nil` if it would leave it untouched
+private enum TilingDrop {
+    case bind(parent: NonLeafTreeNodeObject, index: Int, adaptiveWeight: CGFloat)
+    case swap(with: Window)
+}
+
 /// `cursor` is a parameter rather than read from ``mouseLocation`` so that the drop logic can be tested
 @MainActor
 func moveTilingWindow(_ window: Window, cursor: CGPoint) {
     currentlyManipulatedWithMouseWindowId = window.windowId
     window.lastAppliedLayoutPhysicalRect = nil
+    switch planTilingDrop(window, cursor: cursor) {
+        case nil: return
+        case .bind(let parent, let index, let adaptiveWeight):
+            window.bind(to: parent, adaptiveWeight: adaptiveWeight, index: index)
+        case .swap(let target):
+            swapTreeNodes(mruDominant: window, target)
+    }
+}
+
+@MainActor
+private func planTilingDrop(_ window: Window, cursor: CGPoint) -> TilingDrop? {
     let targetWorkspace = cursor.monitorApproximation.activeWorkspace
     let dropTarget = cursor
         .findWindowRecursively(in: targetWorkspace.rootTilingContainer, virtual: false, fullscreenCoversAll: false)?
@@ -66,30 +101,28 @@ func moveTilingWindow(_ window: Window, cursor: CGPoint) {
         } else {
             0
         }
-        window.bind(
-            to: dropTarget?.parent ?? targetWorkspace.rootTilingContainer,
-            adaptiveWeight: WEIGHT_AUTO,
+        return .bind(
+            parent: dropTarget?.parent ?? targetWorkspace.rootTilingContainer,
             index: index,
+            adaptiveWeight: WEIGHT_AUTO,
         )
-    } else if let dropTarget {
-        // A 'master' container is an ordered list of slots rather than a spatial tree, so dropping into one inserts
-        // the window at the cursor and shifts the rest along, the way Hyprland's 'drop_at_cursor' does. Every other
-        // layout keeps AeroSpace's "swap with the window underneath" behavior
-        if let masterParent = (dropTarget.parent as? TilingContainer)?.takeIf({ $0.layout == .master }) {
-            dropIntoMasterContainer(window, onto: dropTarget, in: masterParent, cursor: cursor)
-        } else {
-            swapTreeNodes(mruDominant: window, dropTarget)
-        }
     }
+    guard let dropTarget else { return nil }
+    // A 'master' container is an ordered list of slots rather than a spatial tree, so dropping into one inserts the
+    // window at the cursor and shifts the rest along, the way Hyprland's 'drop_at_cursor' does. Every other layout
+    // keeps AeroSpace's "swap with the window underneath" behavior
+    guard let masterParent = (dropTarget.parent as? TilingContainer)?.takeIf({ $0.layout == .master }) else {
+        return .swap(with: dropTarget)
+    }
+    return planMasterDrop(window, onto: dropTarget, in: masterParent, cursor: cursor)
 }
 
 /// Inserts `window` next to `target`, before or after it depending on which side of `target`'s midpoint the cursor
 /// sits on. Dropping onto the master area therefore promotes the window to master and pushes the rest down
 @MainActor
-private func dropIntoMasterContainer(_ window: Window, onto target: Window, in parent: TilingContainer, cursor: CGPoint) {
+private func planMasterDrop(_ window: Window, onto target: Window, in parent: TilingContainer, cursor: CGPoint) -> TilingDrop? {
     guard let targetRect = target.lastAppliedLayoutPhysicalRect, let targetIndex = target.ownIndex else {
-        swapTreeNodes(mruDominant: window, target)
-        return
+        return .swap(with: target)
     }
     let axis = parent.weightOrientation
     var index = cursor.getProjection(axis) > targetRect.center.getProjection(axis) ? targetIndex + 1 : targetIndex
@@ -97,14 +130,14 @@ private func dropIntoMasterContainer(_ window: Window, onto target: Window, in p
     if cameFromTheSameContainer, let sourceIndex = window.ownIndex {
         // The window is about to leave this very list, so every slot past it shifts down by one
         if index > sourceIndex { index -= 1 }
-        // Already where it would land. Bailing out keeps the drag from thrashing the layout every mouse event
-        if index == sourceIndex { return }
+        // Already where it would land, so there is nothing to do and no session to pay for
+        if index == sourceIndex { return nil }
     }
-    let binding = window.unbindFromParent()
-    window.bind(
-        to: parent,
-        adaptiveWeight: cameFromTheSameContainer ? binding.adaptiveWeight : WEIGHT_AUTO,
+    return .bind(
+        parent: parent,
         index: index,
+        // Keep the size it already had in this column. Arriving from elsewhere, take an even share
+        adaptiveWeight: cameFromTheSameContainer ? window.getWeight(axis) : WEIGHT_AUTO,
     )
 }
 

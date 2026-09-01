@@ -59,6 +59,9 @@ func runHeavyCompleteRefreshSession(
 func runLightSession<T>(
     _ event: RefreshSessionEvent,
     _: RunSessionGuard,
+    /// Pass `false` from a mouse drag. Every mouse event would otherwise schedule a full world refresh that the next
+    /// event immediately cancels, and the mouse-up handler schedules a real one once the drag is over
+    scheduleCompleteRefresh: Bool = true,
     body: @MainActor () async throws -> T,
 ) async throws -> T {
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
@@ -83,7 +86,7 @@ func runLightSession<T>(
         if focusBefore != focusAfter {
             focusAfter?.nativeFocus() // syncFocusToMacOs
         }
-        if !event.isFocusFollowsMouse { scheduleCancellableCompleteRefreshSession(event) }
+        if !event.isFocusFollowsMouse && scheduleCompleteRefresh { scheduleCancellableCompleteRefreshSession(event) }
         return result
     }
 }

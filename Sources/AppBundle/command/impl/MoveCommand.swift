@@ -144,6 +144,10 @@ private let moveOutMacosUnconventionalWindow = "moving macOS fullscreen, minimiz
     _ workspace: Workspace,
     _ direction: CardinalDirection,
 ) {
+    // A 'master' workspace is a dynamic layout, not a tree you build by hand. There is nothing outside the container
+    // to move into, and wrapping the root in a new tiles container would silently drop the whole workspace out of
+    // the master layout. Behave like boundaries-action=stop instead
+    if workspace.rootTilingContainer.layout == .master { return }
     let prevRoot = workspace.rootTilingContainer
     prevRoot.unbindFromParent()
     // Force tiles layout

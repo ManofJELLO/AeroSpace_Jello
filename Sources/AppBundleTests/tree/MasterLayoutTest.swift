@@ -360,6 +360,31 @@ final class MasterNavigationTest: XCTestCase {
         assertEquals(container.trailingStackChildren.map { ($0 as! Window).windowId }, [3, 5])
     }
 
+    func testMovingOutOfAMasterWorkspaceKeepsTheMasterLayout() async {
+        let (_, windows) = masterWorkspace(name, windowCount: 2)
+        assertEquals(TestWindow.focus(windows[0]), true)
+
+        // The default boundaries-action is create-implicit-container, which wraps the root in a new *tiles*
+        // container. For a master workspace that would silently drop the whole thing out of the master layout
+        await parseCommand("move left").cmdOrDie.run(.defaultEnv, .emptyStdin)
+
+        assertEquals(root(name).layoutDescription, .h_master([.window(1), .window(2)]))
+    }
+
+    func testMovingOutOfATilesWorkspaceStillCreatesAnImplicitContainer() async {
+        let container = Workspace.get(byName: name).rootTilingContainer
+        assertEquals(TestWindow.new(id: 1, parent: container).focusWindow(), true)
+        TestWindow.new(id: 2, parent: container)
+
+        await parseCommand("move left").cmdOrDie.run(.defaultEnv, .emptyStdin)
+
+        // Unchanged upstream behavior for non-master layouts
+        assertEquals(
+            Workspace.get(byName: name).rootTilingContainer.layoutDescription,
+            .h_tiles([.window(1), .h_tiles([.window(2)])]),
+        )
+    }
+
     func testMoveAtTheEdgeHitsTheWorkspaceBoundary() async {
         let (_, windows) = masterWorkspace(name, windowCount: 3)
         assertEquals(TestWindow.focus(windows[0]), true)
