@@ -72,7 +72,8 @@ boundary, as does dragging that boundary with the mouse.
 
 Dragging a window with the mouse inserts it where you drop it and shifts the rest along, so dropping onto the master
 area promotes the window to master. The layout only changes when you release the button, so dragging somewhere and
-back again cancels the move. That matches Hyprland's `drop_at_cursor`; `tiles` and `accordion` keep
+back again cancels the move. Set `live-drag-preview = true` to have the windows rearrange as you drag instead; that
+preview is provisional in the same way, but costs a re-layout on every mouse event. That matches Hyprland's `drop_at_cursor`; `tiles` and `accordion` keep
 AeroSpace's usual behavior of swapping the dragged window with the one underneath.
 
 Defaults for new master containers come from the `[master]` config table:

@@ -748,6 +748,47 @@ final class MasterMouseDropTest: XCTestCase {
         assertNil(currentlyDraggedWithMouseWindowId)
     }
 
+    func testLivePreviewRearrangesBeforeRelease() async throws {
+        config.liveDragPreview = true
+        let (workspace, windows) = try await stackWorkspace()
+
+        beginTilingDrag(windows[3])
+        previewTilingDrag(windows[3], cursor: CGPoint(x: 500, y: 100)) // over the master area
+
+        // With the flag on the tree changes while the drag is still in flight
+        assertEquals(workspace.rootTilingContainer.layoutDescription,
+                     .h_master([.window(4), .window(1), .window(2), .window(3)]))
+    }
+
+    func testLivePreviewIsProvisional() async throws {
+        config.liveDragPreview = true
+        let (workspace, windows) = try await stackWorkspace()
+        let before = workspace.rootTilingContainer.layoutDescription
+
+        beginTilingDrag(windows[3])
+        previewTilingDrag(windows[3], cursor: CGPoint(x: 500, y: 100)) // promote to master
+        assertNotEquals(workspace.rootTilingContainer.layoutDescription, before)
+
+        // Wander back to where the drag started. The cursor is then over the slot the window came from, which
+        // resolves to no drop target at all, so only rebuilding the pre-drag arrangement can bring the layout back.
+        // (Previews that do land on a target converge on their own, because a drop is expressed relative to the
+        // window under the cursor and that window's identity doesn't shift.)
+        previewTilingDrag(windows[3], cursor: CGPoint(x: 1500, y: 900))
+        commitTilingDragIfNeeded(cursor: CGPoint(x: 1500, y: 900))
+
+        assertEquals(workspace.rootTilingContainer.layoutDescription, before)
+    }
+
+    func testLivePreviewIsOffByDefault() async throws {
+        let (workspace, windows) = try await stackWorkspace()
+        let before = workspace.rootTilingContainer.layoutDescription
+
+        beginTilingDrag(windows[3])
+        previewTilingDrag(windows[3], cursor: CGPoint(x: 500, y: 100))
+
+        assertEquals(workspace.rootTilingContainer.layoutDescription, before)
+    }
+
     func testNonMasterContainersStillSwap() async throws {
         let workspace = focus.workspace
         let container = workspace.rootTilingContainer

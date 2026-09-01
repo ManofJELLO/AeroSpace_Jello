@@ -28,6 +28,7 @@ func resetManipulatedWithMouseIfPossible() async throws {
     if currentlyManipulatedWithMouseWindowId != nil {
         currentlyManipulatedWithMouseWindowId = nil
         currentlyDraggedWithMouseWindowId = nil
+        resetTilingDragPreview()
         for workspace in Workspace.all {
             workspace.resetResizeWeightBeforeResizeRecursive()
         }

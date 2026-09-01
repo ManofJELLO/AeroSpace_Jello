@@ -390,6 +390,10 @@ demotes, resizes, rotates and reorients from there.
   and shifts the rest along.
   Dropping onto the master area therefore promotes the window to master.
   The layout only changes when you release the button, so dragging somewhere and back again cancels the move.
+  Set `live-drag-preview = true` to have the windows rearrange as you drag instead.
+  That preview is provisional too: it is recomputed from the arrangement the drag started in, so dragging back to
+  where you started still restores it.
+  It costs a re-layout on every mouse event, which is why it is off by default.
   This mirrors Hyprland's `drop_at_cursor`, and differs from `tiles` and `accordion`, where a drag swaps the dragged
   window with the one underneath it.
 * xref:commands.adoc#master[`master`] does everything master-specific: `swap-with-master`, `focus-master`,

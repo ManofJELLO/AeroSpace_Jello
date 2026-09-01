@@ -26,6 +26,11 @@ enable-normalization-opposite-orientation-for-nested-containers = true
 # You can set 0 to disable the padding feature
 accordion-padding = 30
 
+# Rearrange the layout while a window is being dragged, instead of only when you release the mouse button.
+# The preview is provisional: drag back to where you started and the original arrangement comes back.
+# Leaving it off makes dragging snappier, because a drag then costs no layout work at all until you let go
+live-drag-preview = false
+
 # Possible values: tiles|accordion|master
 default-root-container-layout = 'tiles'
 

@@ -20,7 +20,7 @@ struct MacosFullscreenLayoutSnapshot: Sendable {
 
 extension TreeNode {
     /// Leaf windows in most-recent-first order, obtained by walking `mruChildren` (not `children`) at every level.
-    fileprivate var mruOrderedLeafWindowsRecursive: [Window] {
+    var mruOrderedLeafWindowsRecursive: [Window] {
         if let window = self as? Window { return [window] }
         return mruChildren.flatMap { $0.mruOrderedLeafWindowsRecursive }
     }

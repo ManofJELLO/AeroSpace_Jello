@@ -20,6 +20,7 @@ func setUpWorkspacesForTests() {
     // The next test would then see a window that never gets a rect
     currentlyManipulatedWithMouseWindowId = nil
     currentlyDraggedWithMouseWindowId = nil
+    resetTilingDragPreview()
     config = defaultConfig
     configUrl = defaultConfigUrl
     config.enableNormalizationFlattenContainers = false // Make layout tests more predictable
