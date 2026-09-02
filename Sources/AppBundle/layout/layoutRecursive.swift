@@ -27,13 +27,9 @@ extension TreeNode {
                 for window in container.children.filterIsInstance(of: Window.self) {
                     window.lastAppliedLayoutPhysicalRect = nil
                     window.lastAppliedLayoutVirtualRect = nil
-                    window.syncWindowLevel()
                     try await window.layoutFloatingWindow(context)
                 }
             case .window(let window):
-                // Outside the mouse guard below: a window that stopped floating has to drop back down even if it is
-                // the one being dragged, and the level is not part of the frame the drag is manipulating
-                window.syncWindowLevel()
                 if window.windowId != currentlyManipulatedWithMouseWindowId {
                     lastAppliedLayoutVirtualRect = virtual
                     if window.isFullscreen && window == context.workspace.rootTilingContainer.mostRecentWindowRecursive {

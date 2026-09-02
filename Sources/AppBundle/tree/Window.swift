@@ -8,8 +8,6 @@ open class Window: TreeNode, Hashable {
     var isFullscreen: Bool = false
     var noOuterGapsInFullscreen: Bool = false
     var layoutReason: LayoutReason = .standard
-    /// The level this window was last moved to, or `nil` while it still sits at whatever level macOS gave it
-    var lastAppliedWindowLevel: WindowLevel? = nil
 
     @MainActor
     init(id: UInt32, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
@@ -41,6 +39,8 @@ open class Window: TreeNode, Hashable {
     /// `raise: false` gives the window keyboard focus without pulling it in front of its app's other windows.
     /// Used by focus-follows-mouse, where raising on hover is usually unwanted
     @MainActor func nativeFocus(raise: Bool) { die("Not implemented") }
+    /// Puts this window back on top of its app's other windows, without touching focus
+    @MainActor func nativeRaise() { die("Not implemented") }
     func getAxRect(_ cm: CancellationMode) async throws -> Rect? { die("Not implemented") }
     func getCenter(_ cm: CancellationMode) async throws -> CGPoint? { try await getAxRect(cm)?.center }
 
@@ -63,25 +63,6 @@ extension Window {
             case .macosPopupWindowsContainer: false
             case .tilingContainer: false
             case .unbound: false
-        }
-    }
-
-    /// Where this window belongs in the global stacking order
-    @MainActor
-    var desiredWindowLevel: WindowLevel {
-        isFloating && config.floatingWindowsOnTop ? .floating : .normal
-    }
-
-    /// Keeps the window's level in step with whether it floats.
-    ///
-    /// Called from the layout pass, which is the one place that already knows every window's role. Only writes when
-    /// the level actually has to change, so tiled windows -- the overwhelming majority -- are never touched
-    @MainActor
-    func syncWindowLevel() {
-        let desired = desiredWindowLevel
-        if (lastAppliedWindowLevel ?? .normal) == desired { return }
-        if setWindowLevel(windowId, desired) {
-            lastAppliedWindowLevel = desired
         }
     }
 

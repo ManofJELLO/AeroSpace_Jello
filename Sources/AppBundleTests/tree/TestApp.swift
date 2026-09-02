@@ -8,11 +8,14 @@ final class TestApp: AbstractApp {
     let execPath: String? = nil
     let bundlePath: String? = nil
     @MainActor
-    static let shared = TestApp()
+    static let shared = TestApp(pid: 0)
+    /// A second app, for the tests that care which app a window belongs to
+    @MainActor
+    static let other = TestApp(pid: 1)
 
-    private init() {
-        self.pid = 0
-        self.rawAppBundleId = "bobko.AeroSpace.test-app"
+    private init(pid: Int32) {
+        self.pid = pid
+        self.rawAppBundleId = pid == 0 ? "bobko.AeroSpace.test-app" : "bobko.AeroSpace.test-app-\(pid)"
         self.name = rawAppBundleId
     }
 

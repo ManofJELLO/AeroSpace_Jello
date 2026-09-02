@@ -155,6 +155,17 @@ final class MacApp: AbstractApp {
         }
     }
 
+    /// Puts `windowId` back on top of this app's other windows without touching focus.
+    ///
+    /// Submitted to the same per-app thread as the focus job, so when it follows one it runs after it, and the raised
+    /// window ends up above the window that was just focused
+    @MainActor func raiseWithoutFocus(_ windowId: UInt32) {
+        if serverArgs.isReadOnly { return }
+        _ = withWindowAsync(windowId, .cancellable) { window, job in
+            AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        }
+    }
+
     func setAxFrame(_ windowId: UInt32, _ topLeft: CGPoint?, _ size: CGSize?) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         setFrameJobs[windowId] = withWindowAsync(windowId, .cancellable) { [axApp] window, job in

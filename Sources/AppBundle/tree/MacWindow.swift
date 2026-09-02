@@ -112,6 +112,11 @@ final class MacWindow: Window {
 
     @MainActor override func nativeFocus(raise: Bool) {
         macApp.nativeFocus(windowId, raise: raise)
+        raiseFloatingWindowsOfTheSameApp()
+    }
+
+    @MainActor override func nativeRaise() {
+        macApp.raiseWithoutFocus(windowId)
     }
 
     override func closeAxWindow() {

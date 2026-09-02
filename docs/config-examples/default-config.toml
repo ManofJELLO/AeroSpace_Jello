@@ -31,9 +31,11 @@ accordion-padding = 30
 # Leaving it off makes dragging snappier, because a drag then costs no layout work at all until you let go
 live-drag-preview = false
 
-# Keep floating windows above tiled ones, even when the tiled window belongs to a different app.
-# macOS stacks windows by app, so without this, focusing any window of another app buries every
-# floating window -- which is easy to trigger by accident with focus-follows-mouse.
+# After a tiled window takes focus, put that app's floating windows back on top of it.
+# macOS stacks windows by app, so an app's own dialog is easily buried by its tiled windows --
+# which is easy to trigger by accident with focus-follows-mouse.
+# Only reaches the same app: lifting a window above *another* app's windows needs SIP disabled.
+# Skipped when the workspace holds a macOS-native fullscreen window.
 # Set false to leave stacking entirely to macOS, which is how AeroSpace behaved before this option
 floating-windows-on-top = true
 

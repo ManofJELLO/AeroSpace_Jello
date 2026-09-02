@@ -145,22 +145,25 @@ come to a stop. Above 0 the pointer has to hold still for that long, which is Au
 equivalent and don't need one. `warpX`/`warpY` is already covered by
 `on-focus-changed = ['move-mouse window-lazy-center']`.
 
-### Floating windows that stay on top
+### Floating windows that stay on top of their own app
 
-macOS stacks windows by *app*, not by window. Focusing any window of another app therefore puts **all** of that app's
-windows above **all** of yours -- so a floating dialog, like a Settings window, gets buried the moment you touch
-something else. With focus-follows-mouse on, that happens just by moving the pointer across a tiled window.
+macOS stacks windows by *app*, not by window. Focusing any window therefore puts **all** of that app's windows above
+**all** of every other app's -- so a floating dialog gets buried the moment you touch something else. With
+focus-follows-mouse on, that happens just by moving the pointer across a tiled window.
 
-`floating-windows-on-top` keeps them up:
+`floating-windows-on-top` re-raises an app's floating windows after one of its tiled windows takes focus:
 
 ```toml
 floating-windows-on-top = true   # the default in this fork; false restores upstream behavior
 ```
 
-`kAXRaiseAction` cannot fix this -- it only reorders windows within a single app. Crossing app boundaries means
-setting the window's *level*, so this uses the private SkyLight call `SLSSetWindowLevel`, the same mechanism behind
-yabai's `--layer above`. It is resolved with `dlsym` at run time rather than linked, so a macOS release that drops the
-symbol costs the feature and nothing else: every window simply keeps the level macOS gave it.
+**What this can and cannot do.** `kAXRaiseAction` reorders windows *within* one app, so a dialog stays above its own
+app's tiled windows. Lifting it above a *different* app's windows means changing the window's level, and WindowServer
+ignores level changes to windows owned by another connection -- `SLSSetWindowLevel` returns success and does nothing.
+Tools that manage layers across apps (yabai's `--layer`) get there through a scripting addition that requires
+disabling SIP, which is the one thing AeroSpace exists to avoid. So cross-app always-on-top is out of reach here.
+
+Windows are also left alone when the workspace holds a macOS-native fullscreen window, which owns its space outright.
 
 ## Key features
 
