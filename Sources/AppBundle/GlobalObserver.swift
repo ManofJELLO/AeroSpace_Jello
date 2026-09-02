@@ -63,15 +63,24 @@ enum GlobalObserver {
         nc.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main, using: onNotif)
         nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main, using: onNotif)
 
-        NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { event in
+        NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { @MainActor event in
+            lastMouseDown = event.locationInWindow.withYAxisFlipped
+        }
+
+        NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { @MainActor event in
             // Taken from the event, synchronously. Reading NSEvent.mouseLocation inside the task below gives
             // wherever the pointer has travelled to by the time the main actor gets round to it, which after a quick
             // flick is nowhere near where the button was actually released
             let cursor = event.locationInWindow.withYAxisFlipped
+            // Armed synchronously, before the task below runs: a move notification can arrive before the release has
+            // even been processed, and it needs to find the position waiting for it
+            armLateDrag(releasedAt: cursor)
             // todo reduce number of refreshSession in the callback
             Task.startUnstructured { @MainActor in
                 guard let token: RunSessionGuard = .isServerEnabled else { return }
                 if currentlyManipulatedWithMouseWindowId != nil {
+                    // The drag was recognised in time, so nothing is waiting on a late notification
+                    _ = consumeLateDrag()
                     // Apply the drop and lay it out in one session. Merely scheduling the layout would leave it
                     // cancellable, and the pointer is usually still moving right after a drag, so the next
                     // focus-follows-mouse event would cancel it and the dropped window would sit where it was

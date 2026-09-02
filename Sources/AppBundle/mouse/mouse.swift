@@ -24,3 +24,39 @@ func isManipulatedWithMouse(_ window: Window) async throws -> Bool {
 
 /// Same motivation as in monitorFrameNormalized
 var mouseLocation: CGPoint { NSEvent.mouseLocation.withYAxisFlipped }
+
+/// Where the left button was last pressed, so that a release can tell a drag from a click that wandered a little
+@MainActor var lastMouseDown: CGPoint? = nil
+
+/// Where and when the left button was last released, while it is still plausible that a drag notification is on its
+/// way for it.
+///
+/// A drag is only recognised once the app reports that its window moved, and on a quick flick that report loses its
+/// race with the release: the notification's handler sees the button already up and throws the drag away. Leaving the
+/// release position behind lets the notification land late and still be applied where the button actually came up
+@MainActor private var pendingLateDrag: (cursor: CGPoint, at: ContinuousClock.Instant)? = nil
+
+/// How far the pointer has to travel before a release counts as a drag rather than an unsteady click
+private let dragThreshold: CGFloat = 10
+/// How late a move notification may arrive and still be treated as the tail of the drag that just ended
+private let lateDragGrace: Duration = .milliseconds(300)
+
+/// Records a release that might still turn out to have been a drag. Called synchronously from the event monitor, so
+/// that a notification arriving before the release has even been processed still finds the position
+@MainActor func armLateDrag(releasedAt cursor: CGPoint) {
+    let press = lastMouseDown
+    lastMouseDown = nil
+    guard let press, press.distance(to: cursor) > dragThreshold else {
+        pendingLateDrag = nil
+        return
+    }
+    pendingLateDrag = (cursor, .now)
+}
+
+/// The position of a release still waiting for its move notification, if there is one. One shot: a second caller,
+/// such as the notification our own re-layout provokes, gets nothing
+@MainActor func consumeLateDrag() -> CGPoint? {
+    guard let pending = pendingLateDrag else { return nil }
+    pendingLateDrag = nil
+    return pending.at.advanced(by: lateDragGrace) > .now ? pending.cursor : nil
+}

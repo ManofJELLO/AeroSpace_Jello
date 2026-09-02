@@ -9,8 +9,24 @@ func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableR
     let notif = notif as String
     Task.startUnstructured { @MainActor in
         guard let token: RunSessionGuard = .isServerEnabled else { return }
-        guard let windowId, let window = Window.get(byId: windowId), try await isManipulatedWithMouse(window) else {
+        guard let windowId, let window = Window.get(byId: windowId) else {
             scheduleCancellableCompleteRefreshSession(.ax(notif))
+            return
+        }
+        guard try await isManipulatedWithMouse(window) else {
+            // The button is already up. If it only just came up after travelling, this is the tail of a drag whose
+            // notifications lost their race with the release -- which is what a very quick flick looks like. Apply
+            // it where the button actually came up, rather than throwing the drag away
+            if window.parent is TilingContainer, let cursor = consumeLateDrag() {
+                try await runLightSession(.ax(notif), token) {
+                    moveTilingWindow(window, cursor: cursor)
+                    // moveTilingWindow marks the window as mouse-manipulated, and the layout at the end of this
+                    // session skips whichever window that names
+                    clearMouseManipulationState()
+                }
+            } else {
+                scheduleCancellableCompleteRefreshSession(.ax(notif))
+            }
             return
         }
         // Most events of a drag land inside the slot the window already occupies. Running a session for those costs

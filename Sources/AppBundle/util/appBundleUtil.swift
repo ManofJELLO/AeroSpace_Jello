@@ -77,6 +77,11 @@ func + (a: CGPoint, b: CGPoint) -> CGPoint {
 extension CGPoint: ConvenienceMutable {}
 
 extension CGPoint {
+    func distance(to other: CGPoint) -> CGFloat {
+        let (dx, dy) = (x - other.x, y - other.y)
+        return (dx * dx + dy * dy).squareRoot()
+    }
+
     func distance(toOuterFrame rect: Rect) -> CGFloat {
         // Subtract 1 from maxX/maxY because the right/bottom bounds are
         // exclusive.
