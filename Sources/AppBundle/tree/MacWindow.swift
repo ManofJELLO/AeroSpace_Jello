@@ -197,7 +197,9 @@ final class MacWindow: Window {
     }
 
     override func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) {
-        macApp.setAxFrame(windowId, topLeft, size)
+        let force = needsUnconditionalFrameWrite
+        needsUnconditionalFrameWrite = false
+        macApp.setAxFrame(windowId, topLeft, size, force: force)
     }
 
     override func getAxRect(_ cm: CancellationMode) async throws -> Rect? {

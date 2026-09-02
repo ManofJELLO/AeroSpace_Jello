@@ -8,6 +8,12 @@ open class Window: TreeNode, Hashable {
     var isFullscreen: Bool = false
     var noOuterGapsInFullscreen: Bool = false
     var layoutReason: LayoutReason = .standard
+    /// Set while the mouse has this window out from under the layout.
+    ///
+    /// An app reports its window's position through AX asynchronously, so just after a drag the frame cache can
+    /// still be holding the position from before it. Skipping the write on that basis would leave the window
+    /// wherever the drag dropped it, off the grid, until something else happened to move it
+    var needsUnconditionalFrameWrite: Bool = false
 
     @MainActor
     init(id: UInt32, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {

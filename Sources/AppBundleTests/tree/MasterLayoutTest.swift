@@ -699,11 +699,24 @@ final class MasterMouseDropTest: XCTestCase {
                      .h_master([.window(3), .window(1), .window(2), .window(4)]))
     }
 
-    func testDroppingWhereTheWindowAlreadyIsChangesNothing() async throws {
+    func testDroppingOnTheNearHalfOfANeighbourTradesPlacesWithIt() async throws {
         let (workspace, windows) = try await stackWorkspace()
 
-        // The lower half of windows[1] is the slot windows[2] already occupies
+        // The lower half of windows[1] resolves to the slot windows[2] already occupies, so inserting there would
+        // be a no-op. The drop was aimed at another window though, so they trade places instead: otherwise swapping
+        // two stacked windows means dragging past the far window's midpoint, most of its height
         moveTilingWindow(windows[2], cursor: CGPoint(x: 1500, y: 340))
+
+        assertEquals(workspace.rootTilingContainer.layoutDescription,
+                     .h_master([.window(1), .window(3), .window(2), .window(4)]))
+    }
+
+    func testDroppingAWindowBackOnItsOwnSlotChangesNothing() async throws {
+        let (workspace, windows) = try await stackWorkspace()
+
+        // Dragging somewhere and back again has to cancel. A window is never its own drop target, so this resolves
+        // to no target at all rather than to a swap
+        moveTilingWindow(windows[2], cursor: CGPoint(x: 1500, y: 600))
 
         assertEquals(workspace.rootTilingContainer.layoutDescription,
                      .h_master([.window(1), .window(2), .window(3), .window(4)]))

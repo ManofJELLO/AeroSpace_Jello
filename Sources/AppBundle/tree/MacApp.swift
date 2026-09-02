@@ -166,7 +166,8 @@ final class MacApp: AbstractApp {
         }
     }
 
-    func setAxFrame(_ windowId: UInt32, _ topLeft: CGPoint?, _ size: CGSize?) {
+    /// `force` bypasses the frame cache, for a window whose real position AeroSpace can't yet have been told about
+    func setAxFrame(_ windowId: UInt32, _ topLeft: CGPoint?, _ size: CGSize?, force: Bool = false) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         setFrameJobs[windowId] = withAxWindowAsync(windowId, .cancellable) { [axApp] window, job in
             // Writing a frame costs up to six AX round trips: reading and toggling the enhanced-user-interface
@@ -174,7 +175,7 @@ final class MacApp: AbstractApp {
             // at -- a focus change re-lays out every visible window without moving any of them -- and two reads
             // settle that far more cheaply
             let request = AxFrame(topLeft: topLeft, size: size)
-            if canSkipFrameWrite(
+            if !force, canSkipFrameWrite(
                 request: request,
                 lastRequest: window.lastFrameRequest,
                 lastObserved: window.lastObservedFrame,

@@ -96,6 +96,7 @@ func beginTilingDrag(_ window: Window) {
     currentlyManipulatedWithMouseWindowId = window.windowId
     currentlyDraggedWithMouseWindowId = window.windowId
     window.lastAppliedLayoutPhysicalRect = nil
+    window.needsUnconditionalFrameWrite = true
 }
 
 /// Shows where the window would land if it were released now. Does nothing unless `live-drag-preview` is on
@@ -227,6 +228,7 @@ private enum TilingDrop {
 func moveTilingWindow(_ window: Window, cursor: CGPoint) {
     currentlyManipulatedWithMouseWindowId = window.windowId
     window.lastAppliedLayoutPhysicalRect = nil
+    window.needsUnconditionalFrameWrite = true
     planTilingDrop(window, cursor: cursor)?.apply(to: window)
 }
 
@@ -306,8 +308,12 @@ private func planMasterDrop(
     if cameFromTheSameContainer, let sourceIndex = window.ownIndex {
         // The window is about to leave this very list, so every slot past it shifts down by one
         if index > sourceIndex { index -= 1 }
-        // Already where it would land, so there is nothing to do and no session to pay for
-        if index == sourceIndex { return nil }
+        // Landing on the near half of a neighbour resolves to the slot the window already occupies. Inserting there
+        // would be a no-op, but the drop was deliberately made onto another window, so trade places with it instead
+        // of quietly doing nothing -- otherwise swapping two stacked windows means dragging past the far window's
+        // midpoint, which for a tall window is most of its height. Dropping a window back on its own slot is the
+        // case that cancels a drag, and that is caught earlier: a window is never its own drop target
+        if index == sourceIndex { return .swap(with: target) }
     }
     return .bind(
         parent: parent,

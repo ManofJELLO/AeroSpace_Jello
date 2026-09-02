@@ -389,6 +389,9 @@ demotes, resizes, rotates and reorients from there.
 * Dragging a window with the mouse *inserts* it where you drop it, before or after the window under the cursor,
   and shifts the rest along.
   Dropping onto the master area therefore promotes the window to master.
+  Dropping onto the near half of a neighbour would resolve to the slot the window is already in; it trades places
+  with that neighbour instead, so swapping two stacked windows doesn't require dragging past the far window's
+  midpoint.
   The layout only changes when you release the button, so dragging somewhere and back again cancels the move.
   Set `live-drag-preview = true` to have the windows rearrange as you drag instead.
   That preview is provisional too: it is recomputed from the arrangement the drag started in, so dragging back to
