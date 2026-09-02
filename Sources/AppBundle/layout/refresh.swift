@@ -7,9 +7,6 @@ private var activeRefreshTask: Task<(), any Error>? = nil
 @MainActor
 func scheduleCancellableCompleteRefreshSession(
     _ event: RefreshSessionEvent,
-    /// Pass `false` when the tree cannot have changed. Laying the workspaces out writes an AX frame for every visible
-    /// window, which is wasted work when the frames are the ones already on screen
-    layoutWorkspaces: Bool = true,
     optimisticallyPreLayoutWorkspaces: Bool = false,
 ) {
     activeRefreshTask?.cancel()
@@ -18,7 +15,6 @@ func scheduleCancellableCompleteRefreshSession(
         await runHeavyCompleteRefreshSession(
             event,
             assumeCancellable: true,
-            layoutWorkspaces: layoutWorkspaces,
             optimisticallyPreLayoutWorkspaces: optimisticallyPreLayoutWorkspaces,
         )
     }

@@ -16,10 +16,11 @@ enum GlobalObserver {
             if notifName == NSWorkspace.didActivateApplicationNotification.rawValue {
                 // An activation we asked for ourselves. The model already reflects it, and the tree is unchanged, so
                 // the layout passes would only rewrite the frames that are on screen already
+                // Only the duplicate pre-layout pass is dropped. Skipping the layout outright would starve any
+                // layout still pending when our own activation arrives, and leave windows where they were put
                 let selfInflicted = consumeSelfInflictedActivation(pid)
                 scheduleCancellableCompleteRefreshSession(
                     .globalObserver(notifName),
-                    layoutWorkspaces: !selfInflicted,
                     optimisticallyPreLayoutWorkspaces: !selfInflicted,
                 )
             } else {
@@ -62,21 +63,30 @@ enum GlobalObserver {
         nc.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main, using: onNotif)
         nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main, using: onNotif)
 
-        NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { _ in
+        NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { event in
+            // Taken from the event, synchronously. Reading NSEvent.mouseLocation inside the task below gives
+            // wherever the pointer has travelled to by the time the main actor gets round to it, which after a quick
+            // flick is nowhere near where the button was actually released
+            let cursor = event.locationInWindow.withYAxisFlipped
             // todo reduce number of refreshSession in the callback
-            //  resetManipulatedWithMouseIfPossible might call its own refreshSession
-            //  The end of the callback calls refreshSession
             Task.startUnstructured { @MainActor in
                 guard let token: RunSessionGuard = .isServerEnabled else { return }
-                // Apply the drag before the manipulation state is cleared: resetManipulatedWithMouseIfPossible
-                // schedules the refresh that lays the result out
-                commitTilingDragIfNeeded(cursor: mouseLocation)
-                try await resetManipulatedWithMouseIfPossible()
-                let mouseLocation = mouseLocation
-                let clickedMonitor = mouseLocation.monitorApproximation
+                if currentlyManipulatedWithMouseWindowId != nil {
+                    // Apply the drop and lay it out in one session. Merely scheduling the layout would leave it
+                    // cancellable, and the pointer is usually still moving right after a drag, so the next
+                    // focus-follows-mouse event would cancel it and the dropped window would sit where it was
+                    // released until something unrelated happened to trigger a layout
+                    _ = try await runLightSession(.globalObserverLeftMouseUp, token) {
+                        commitTilingDragIfNeeded(cursor: cursor)
+                        // Cleared inside the session, before it lays out: the layout skips whichever window the
+                        // mouse is holding, so the dropped one would be left behind otherwise
+                        clearMouseManipulationState()
+                    }
+                }
+                let clickedMonitor = cursor.monitorApproximation
                 switch true {
                     // Detect clicks on desktop of different monitors
-                    case clickedMonitor.visibleRect.contains(mouseLocation) && clickedMonitor.activeWorkspace != focus.workspace:
+                    case clickedMonitor.visibleRect.contains(cursor) && clickedMonitor.activeWorkspace != focus.workspace:
                         _ = try await runLightSession(.globalObserverLeftMouseUp, token) {
                             clickedMonitor.activeWorkspace.focusWorkspace()
                         }

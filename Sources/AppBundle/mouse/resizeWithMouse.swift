@@ -23,16 +23,18 @@ func resizedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutabl
     }
 }
 
+/// Releases the window the mouse was holding, so that the layout stops leaving it alone.
+///
+/// Deliberately does not schedule the layout itself: the caller runs it in the same session that applies the drop,
+/// because a *scheduled* layout is cancellable and the pointer is usually still moving right after a drag
 @MainActor
-func resetManipulatedWithMouseIfPossible() async throws {
-    if currentlyManipulatedWithMouseWindowId != nil {
-        currentlyManipulatedWithMouseWindowId = nil
-        currentlyDraggedWithMouseWindowId = nil
-        resetTilingDragPreview()
-        for workspace in Workspace.all {
-            workspace.resetResizeWeightBeforeResizeRecursive()
-        }
-        scheduleCancellableCompleteRefreshSession(.resetManipulatedWithMouse, optimisticallyPreLayoutWorkspaces: true)
+func clearMouseManipulationState() {
+    if currentlyManipulatedWithMouseWindowId == nil { return }
+    currentlyManipulatedWithMouseWindowId = nil
+    currentlyDraggedWithMouseWindowId = nil
+    resetTilingDragPreview()
+    for workspace in Workspace.all {
+        workspace.resetResizeWeightBeforeResizeRecursive()
     }
 }
 
