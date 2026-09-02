@@ -139,10 +139,14 @@ focus-follows-mouse.disable-key = 'control'  # hold to suspend. none|control|opt
 These map onto AutoRaise's `focusDelay`, `delay` (where `0` means "focus but never raise"), and `disableKey`.
 Defaults are unchanged, so an existing config behaves exactly as before.
 
-At `delay-ms = 0` focus tracks the pointer continuously, the way AutoRaise does, rather than waiting for it to
-come to a stop. Above 0 the pointer has to hold still for that long, which is AutoRaise's `focusDelay` and covers
-`requireMouseStop` too. AeroSpace is event-driven rather than polling, so `pollMillis` and `mouseDelta` have no
-equivalent and don't need one. `warpX`/`warpY` is already covered by
+`delay-ms` measures how long the pointer has been **inside one window's region**, not how long it has been holding
+still. Dwell time, not stopped time. Waiting for the mouse to stop reads as lag -- you sit there wondering what the
+window manager is waiting for -- and it punishes the ordinary way people move a mouse. Dwell time just means a window
+you sweep across on the way somewhere else doesn't get focus, which is the actual point of the delay. At `0` focus
+follows the pointer immediately, the way AutoRaise does.
+
+AeroSpace is event-driven rather than polling, so AutoRaise's `pollMillis` and `mouseDelta` have no equivalent and
+don't need one, and `requireMouseStop` is deliberately not reproduced. `warpX`/`warpY` is already covered by
 `on-focus-changed = ['move-mouse window-lazy-center']`.
 
 ### Floating windows that stay on top of their own app

@@ -5,6 +5,9 @@ import AppKit
 /// The newest pointer position that hasn't been acted on yet. Mouse moves arrive an order of magnitude faster than a
 /// focus change can be carried out, so they are coalesced here instead of each one starting its own attempt
 @MainActor private var pendingFocusFollowsLocation: CGPoint? = nil
+/// The window the pointer is currently over, and when it entered. `delay-ms` is measured against this: how long the
+/// pointer has been inside one window's region, not how long it has been holding still
+@MainActor private var hoveredSince: (windowId: UInt32, since: ContinuousClock.Instant)? = nil
 
 @MainActor func syncFocusFollowsMouse(_ config: Config) {
     if config.focusFollowsMouse.enabled == (focusFollowsMouseMonitor != nil) {
@@ -17,6 +20,7 @@ import AppKit
         focusFollowsTask?.cancel()
         focusFollowsTask = nil
         pendingFocusFollowsLocation = nil
+        hoveredSince = nil
         return
     }
 
@@ -39,22 +43,21 @@ import AppKit
         defer { focusFollowsTask = nil }
         while let location = pendingFocusFollowsLocation {
             pendingFocusFollowsLocation = nil
-            try await focusWindow(under: location)
+            guard let remainingDwell = try await focusWindow(under: location) else { continue }
+            try await Task.sleep(for: remainingDwell)
+            // Re-examine where the pointer is now. It may well have come to rest inside the window, in which case no
+            // further event is coming and the loop would otherwise exit with the dwell never finishing
+            if pendingFocusFollowsLocation == nil { pendingFocusFollowsLocation = mouseLocation }
         }
     }
 }
 
-@MainActor private func focusWindow(under location: CGPoint) async throws {
-    guard let token: RunSessionGuard = .isServerEnabled else { return }
+/// Returns how much longer the pointer has to stay in this window before focus should move, or `nil` when there is
+/// nothing left to wait for
+@MainActor private func focusWindow(under location: CGPoint) async throws -> Duration? {
+    guard let token: RunSessionGuard = .isServerEnabled else { return nil }
     let settings = config.focusFollowsMouse
-    if settings.delayMs > 0 {
-        try await Task.sleep(for: .milliseconds(settings.delayMs))
-        // A newer position arrived while we waited, so the pointer hasn't come to rest yet. Drop this attempt; the
-        // worker loop immediately starts the wait over on the position that did arrive
-        if pendingFocusFollowsLocation != nil { return }
-    }
-    // Checked after the delay, so releasing the key doesn't retroactively focus whatever you passed over
-    if settings.disableKey.isHeld { return }
+    if settings.disableKey.isHeld { return nil }
     try checkCancellation()
 
     // Work out the window from the model before touching the AX API. Hovering tiled windows needs no AX request at
@@ -75,11 +78,27 @@ import AppKit
     }
     // Checked before the AX round trip below, because while the pointer crosses the window it is already on, this is
     // the answer almost every time
-    guard let window, window != focus.windowOrNil else { return }
+    guard let window, window != focus.windowOrNil else {
+        hoveredSince = nil
+        return nil
+    }
+
+    // 'delay-ms' asks the pointer to stay inside the window for that long -- not to stop moving. Waiting on the
+    // pointer holding still reads as lag, and it punishes the ordinary way people move a mouse
+    if settings.delayMs > 0 {
+        let now = ContinuousClock.now
+        let sameWindow = hoveredSince?.windowId == window.windowId
+        let entered = sameWindow ? hoveredSince.orDie().since : now
+        hoveredSince = (window.windowId, entered)
+        let required = Duration.milliseconds(settings.delayMs)
+        let dwelled = entered.duration(to: now)
+        if dwelled < required { return required - dwelled }
+    }
+    hoveredSince = nil
 
     // Ignores macOS menubar dropdown, but, unfortunately, it doesn't ignore non-native menu-like fake windows.
     // todo: It would be cool to somehow reuse isWindowHeuristic logic here
-    if await isAxWindowUnderMouse(location) == false { return }
+    if await isAxWindowUnderMouse(location) == false { return nil }
     try checkCancellation()
 
     try await runLightSession(.focusFollowsMouse, token) {
@@ -90,6 +109,7 @@ import AppKit
         window.nativeFocus(raise: settings.raise)
         noteFocusGivenTo(window)
     }
+    return nil
 }
 
 @concurrent

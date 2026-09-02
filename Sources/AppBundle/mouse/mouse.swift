@@ -34,7 +34,9 @@ var mouseLocation: CGPoint { NSEvent.mouseLocation.withYAxisFlipped }
 /// A drag is only recognised once the app reports that its window moved, and on a quick flick that report loses its
 /// race with the release: the notification's handler sees the button already up and throws the drag away. Leaving the
 /// release position behind lets the notification land late and still be applied where the button actually came up
-@MainActor private var pendingLateDrag: (cursor: CGPoint, at: ContinuousClock.Instant)? = nil
+@MainActor private var pendingLateDrag: (cursor: CGPoint, at: ContinuousClock.Instant, releaseId: Int)? = nil
+/// The release whose drag has already been applied, so that a duplicate of it can't set one up again
+@MainActor private var handledReleaseId: Int? = nil
 
 /// How far the pointer has to travel before a release counts as a drag rather than an unsteady click
 private let dragThreshold: CGFloat = 10
@@ -43,14 +45,19 @@ private let lateDragGrace: Duration = .milliseconds(300)
 
 /// Records a release that might still turn out to have been a drag. Called synchronously from the event monitor, so
 /// that a notification arriving before the release has even been processed still finds the position
-@MainActor func armLateDrag(releasedAt cursor: CGPoint) {
-    let press = lastMouseDown
-    lastMouseDown = nil
-    guard let press, press.distance(to: cursor) > dragThreshold else {
-        pendingLateDrag = nil
-        return
-    }
-    pendingLateDrag = (cursor, .now)
+/// `releaseId` is the event's `eventNumber`. macOS hands a global monitor the same mouse-up twice while a window is
+/// being dragged -- same event number, a few milliseconds apart -- and the duplicate must not disturb what the first
+/// one set up, nor arm a second drag of its own
+@MainActor func armLateDrag(releasedAt cursor: CGPoint, releaseId: Int) {
+    if handledReleaseId == releaseId || pendingLateDrag?.releaseId == releaseId { return }
+    guard let press = lastMouseDown, press.distance(to: cursor) > dragThreshold else { return }
+    pendingLateDrag = (cursor, .now, releaseId)
+}
+
+/// Records that this release has been dealt with by the ordinary path, so nothing is left waiting on a notification
+@MainActor func markReleaseHandled(_ releaseId: Int) {
+    handledReleaseId = releaseId
+    if pendingLateDrag?.releaseId == releaseId { pendingLateDrag = nil }
 }
 
 /// The position of a release still waiting for its move notification, if there is one. One shot: a second caller,

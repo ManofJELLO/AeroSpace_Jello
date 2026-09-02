@@ -73,7 +73,8 @@ struct Config: ConvenienceMutable {
 
 struct FocusFollowsMouse: ConvenienceMutable {
     var enabled: Bool = false
-    /// How long the pointer has to rest over a window before it takes focus. `0` focuses on the first mouse move.
+    /// How long the pointer has to stay inside a window before it takes focus. Dwell time, not stopped time: the
+    /// pointer never has to hold still. `0` focuses as soon as the pointer is over the window.
     /// Equivalent to AutoRaise's `focusDelay`, but in milliseconds rather than poll ticks
     var delayMs: Int = 0
     /// Whether the window is also pulled in front of its app's other windows. Equivalent to AutoRaise's `delay`,

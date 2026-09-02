@@ -74,13 +74,13 @@ enum GlobalObserver {
             let cursor = event.locationInWindow.withYAxisFlipped
             // Armed synchronously, before the task below runs: a move notification can arrive before the release has
             // even been processed, and it needs to find the position waiting for it
-            armLateDrag(releasedAt: cursor)
+            armLateDrag(releasedAt: cursor, releaseId: event.eventNumber)
             // todo reduce number of refreshSession in the callback
             Task.startUnstructured { @MainActor in
                 guard let token: RunSessionGuard = .isServerEnabled else { return }
                 if currentlyManipulatedWithMouseWindowId != nil {
                     // The drag was recognised in time, so nothing is waiting on a late notification
-                    _ = consumeLateDrag()
+                    markReleaseHandled(event.eventNumber)
                     // Apply the drop and lay it out in one session. Merely scheduling the layout would leave it
                     // cancellable, and the pointer is usually still moving right after a drag, so the next
                     // focus-follows-mouse event would cancel it and the dropped window would sit where it was
