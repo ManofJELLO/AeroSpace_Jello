@@ -40,6 +40,28 @@ final class SavedLayoutTest: XCTestCase {
         }
     }
 
+    func testAWindowMissingFromTheSnapshotIsTiledRatherThanOrphaned() async throws {
+        let workspace = Workspace.get(byName: name)
+        let root = workspace.rootTilingContainer
+        let known = TestWindow.new(id: 1, parent: root)
+        let snapshot = FrozenContainer(root)
+
+        // Opened while AeroSpace was down, so startup bound it to the workspace but the snapshot has never heard
+        // of it. Detaching the old root would strand it outside every workspace, where no command can reach it
+        let newcomer = TestWindow.new(id: 2, parent: root)
+
+        let prevRoot = workspace.rootTilingContainer
+        let potentialOrphans = prevRoot.allLeafWindowsRecursive
+        restoreTreeRecursive(frozenContainer: snapshot, parent: workspace, index: INDEX_BIND_LAST, skipUnrestorableWindows: true)
+        prevRoot.unbindFromParent()
+        try await tileWindowsTheSnapshotDidNotClaim(potentialOrphans, on: workspace)
+
+        let tiled = workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.windowId).toSet()
+        XCTAssertTrue(tiled.contains(known.windowId))
+        XCTAssertTrue(tiled.contains(newcomer.windowId), "the window absent from the snapshot was dropped")
+        XCTAssertNotNil(newcomer.parent)
+    }
+
     func testARebuiltTreeMatchesTheOneItWasSavedFrom() throws {
         let workspace = Workspace.get(byName: name)
         let root = workspace.rootTilingContainer

@@ -59,7 +59,7 @@ func saveLayoutForRestart() {
 /// Puts the windows back where the previous run left them. Returns whether anything was restored, so that the
 /// startup heuristic knows to keep its hands off the layout it just rebuilt
 @MainActor
-func restoreSavedLayout() -> Bool {
+func restoreSavedLayout() async throws -> Bool {
     if !config.restoreLayoutOnRestart || serverArgs.isReadOnly { return false }
     guard let saved = readSavedLayout() else { return false }
     // Consume it either way. A snapshot that survived one failed restore would keep being retried against a world
@@ -79,6 +79,7 @@ func restoreSavedLayout() -> Bool {
     for savedWorkspace in saved.workspaces {
         let workspace = Workspace.get(byName: savedWorkspace.name)
         let prevRoot = workspace.rootTilingContainer
+        let potentialOrphans = prevRoot.allLeafWindowsRecursive
         // Rebuild before detaching the old root, for the same reason restoreMacosFullscreenLayout does: the lookup
         // that finds each window walks down from the workspaces, so the windows have to stay reachable meanwhile
         restoreTreeRecursive(
@@ -88,6 +89,7 @@ func restoreSavedLayout() -> Bool {
             skipUnrestorableWindows: true,
         )
         prevRoot.unbindFromParent()
+        try await tileWindowsTheSnapshotDidNotClaim(potentialOrphans, on: workspace)
         for windowId in savedWorkspace.floatingWindowIds {
             MacWindow.get(byId: windowId)?.bindAsFloatingWindow(to: workspace)
         }
@@ -96,6 +98,18 @@ func restoreSavedLayout() -> Bool {
             || !savedWorkspace.floatingWindowIds.isEmpty
     }
     return restoredAnything
+}
+
+/// Re-tiles whichever of `candidates` the rebuilt tree didn't take.
+///
+/// A window opened while AeroSpace was down is not in the snapshot, but startup did bind it to a workspace, so it is
+/// hanging off the root that gets detached. Left there it is orphaned: reachable from no workspace, and so invisible
+/// to every command and impossible to tile again
+@MainActor
+func tileWindowsTheSnapshotDidNotClaim(_ candidates: [Window], on workspace: Workspace) async throws {
+    for orphan in candidates - workspace.rootTilingContainer.allLeafWindowsRecursive {
+        try await orphan.relayoutWindow(on: workspace, .cancellable, forceTile: true)
+    }
 }
 
 @MainActor
