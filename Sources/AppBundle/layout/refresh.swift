@@ -97,6 +97,10 @@ func runLightSession<T>(
 ) async throws -> T {
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer { signposter.endInterval(#function, state) }
+    // Whatever was pending has work in it that somebody is waiting on -- a window closing schedules the re-layout
+    // that fills the gap it left. Sessions that don't schedule a replacement have to put it back, or that work is
+    // simply swallowed
+    let cancelledPendingRefresh = activeRefreshTask != nil
     activeRefreshTask?.cancel() // Give priority to runSession
     activeRefreshTask = nil
     return try await $refreshSessionEvent.withValue(event) {
@@ -125,7 +129,11 @@ func runLightSession<T>(
         if !event.isFocusFollowsMouse && focusBefore != focusAfter {
             focusAfter?.nativeFocus() // syncFocusToMacOs
         }
-        if !event.isFocusFollowsMouse && scheduleCompleteRefresh { scheduleCancellableCompleteRefreshSession(event) }
+        // A focus-follows-mouse session lays out nothing and schedules nothing, which is what keeps it quick. That
+        // is only safe when it had nothing to swallow: having cancelled a pending refresh, it owes one back
+        if (!event.isFocusFollowsMouse && scheduleCompleteRefresh) || cancelledPendingRefresh {
+            scheduleCancellableCompleteRefreshSession(event)
+        }
         return result
     }
 }
