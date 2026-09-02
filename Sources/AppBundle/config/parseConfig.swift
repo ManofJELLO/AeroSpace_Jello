@@ -149,6 +149,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     "accordion-padding": Parser(\.accordionPadding, parseInt),
     "live-drag-preview": Parser(\.liveDragPreview, parseBool),
     "floating-windows-on-top": Parser(\.floatingWindowsOnTop, parseBool),
+    "restore-layout-on-restart": Parser(\.restoreLayoutOnRestart, parseBool),
     "master": Parser(\.master, parseMasterConfig),
     persistentWorkspacesKey: Parser(\.persistentWorkspaces, parsePersistentWorkspaces),
     "exec-on-workspace-change": Parser(\.execOnWorkspaceChange, parseArrayOfStrings),

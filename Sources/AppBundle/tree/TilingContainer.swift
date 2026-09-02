@@ -90,7 +90,7 @@ extension TilingContainer {
     }
 }
 
-enum Layout: String {
+enum Layout: String, Codable {
     case tiles
     case accordion
     case master
@@ -109,7 +109,7 @@ extension String {
 /// The parameters of the `master` layout. Only meaningful for ``TilingContainer``s whose ``TilingContainer/layout``
 /// is ``Layout/master``, but they are kept around for other layouts too, so that toggling a container in and out of
 /// `master` doesn't lose the user's tweaks.
-struct MasterState: Equatable, Sendable {
+struct MasterState: Codable, Equatable, Sendable {
     /// Which side of the container's ``TilingContainer/orientation`` axis holds the master area
     var placement: MasterPlacement = .start
     /// How many leading children form the master group. See ``TilingContainer/effectiveMasterCount``

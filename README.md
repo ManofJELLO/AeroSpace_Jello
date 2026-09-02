@@ -169,6 +169,23 @@ disabling SIP, which is the one thing AeroSpace exists to avoid. So cross-app al
 
 Windows are also left alone when the workspace holds a macOS-native fullscreen window, which owns its space outright.
 
+### The layout survives a restart
+
+Restarting AeroSpace doesn't restart the apps it manages, so their windows keep their `CGWindowID`s across the gap.
+The tiling tree is written out on quit and rebuilt on startup, which is what stops a `brew upgrade` from discovering
+every window fresh, assigning each to whichever workspace its monitor happens to be showing, and flattening the whole
+arrangement onto one workspace.
+
+```toml
+restore-layout-on-restart = true   # the default in this fork
+```
+
+The saved layout is discarded if the machine rebooted in between -- window ids are only unique within a boot, and a
+recycled id would drop an unrelated window into the slot its predecessor held. Within a boot, an id whose app no
+longer matches the one recorded for it invalidates the whole snapshot rather than part of it, since ids that have
+been recycled can't be trusted individually. Windows that closed while AeroSpace was down are skipped; windows that
+appeared are left where startup put them.
+
 ## Key features
 
 - Tiling window manager based on a [tree paradigm](https://nikitabobko.github.io/AeroSpace/guide#tree)

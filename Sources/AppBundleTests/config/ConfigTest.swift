@@ -631,6 +631,12 @@ final class ConfigTest: XCTestCase {
         assertEquals(result.config.focusFollowsMouse.disableKey, .none)
     }
 
+    func testParseRestoreLayoutOnRestart() {
+        assertEquals(parseConfig("").config.restoreLayoutOnRestart, true)
+        assertEquals(parseConfig("restore-layout-on-restart = false").config.restoreLayoutOnRestart, false)
+        assertEquals(parseConfig("restore-layout-on-restart = false").errors, [])
+    }
+
     func testParseFloatingWindowsOnTop() {
         assertEquals(parseConfig("").config.floatingWindowsOnTop, true)
         assertEquals(parseConfig("floating-windows-on-top = false").config.floatingWindowsOnTop, false)

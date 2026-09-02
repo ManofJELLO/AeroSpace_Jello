@@ -18,7 +18,7 @@ public enum MasterOrientation: String, CaseIterable, Equatable, Sendable {
 }
 
 /// Where the master area sits along the container's ``Orientation`` axis
-public enum MasterPlacement: String, CaseIterable, Equatable, Sendable {
+public enum MasterPlacement: String, CaseIterable, Codable, Equatable, Sendable {
     /// Left (for `.h`) or top (for `.v`)
     case start
     /// Right (for `.h`) or bottom (for `.v`)

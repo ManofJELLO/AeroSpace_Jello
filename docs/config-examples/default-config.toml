@@ -39,6 +39,12 @@ live-drag-preview = false
 # Set false to leave stacking entirely to macOS, which is how AeroSpace behaved before this option
 floating-windows-on-top = true
 
+# Put the windows back where they were when AeroSpace restarts, instead of discovering them fresh and
+# letting them all land on whichever workspace their monitor is showing. This is what stops a
+# 'brew upgrade' from flattening the whole arrangement onto one workspace.
+# The saved layout is discarded if the machine rebooted in between, since window ids don't survive that
+restore-layout-on-restart = true
+
 # Possible values: tiles|accordion|master
 default-root-container-layout = 'tiles'
 

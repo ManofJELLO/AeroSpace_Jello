@@ -52,6 +52,9 @@ struct Config: ConvenienceMutable {
     /// Keep floating windows above tiled ones, across apps. Off leaves stacking entirely to macOS, which layers by
     /// app, so focusing any window of another app buries every floating window
     var floatingWindowsOnTop: Bool = true
+    /// Put the windows back where they were when AeroSpace restarts. Without it every window is discovered fresh
+    /// and lands on whichever workspace its monitor is showing, so an upgrade flattens the whole arrangement
+    var restoreLayoutOnRestart: Bool = true
     var master: MasterConfig = MasterConfig()
     var enableNormalizationOppositeOrientationForNestedContainers: Bool = true
     var persistentWorkspaces: OrderedSet<String> = []

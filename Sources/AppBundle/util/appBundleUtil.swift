@@ -21,11 +21,21 @@ func interceptTermination(_ _signal: Int32) {
 @MainActor
 func initTerminationHandler() {
     unsafe _terminationHandler = AppServerTerminationHandler()
+    // beforeTermination is only reached from the menu bar's Quit button and, in debug builds, the signal handler.
+    // A quit asked for over Apple events -- which is how `brew upgrade` and release.sh stop the app -- goes
+    // straight to NSApplication.terminate and reaches neither. Saving the layout is hung off the notification
+    // instead, which every route to termination posts
+    NotificationCenter.default.addObserver(
+        forName: NSApplication.willTerminateNotification,
+        object: nil,
+        queue: .main,
+    ) { _ in MainActor.assumeIsolated { saveLayoutForRestart() } }
 }
 
 private struct AppServerTerminationHandler: TerminationHandler {
     @MainActor
     func beforeTermination() {
+        saveLayoutForRestart()
         // Make all windows fullscreen before Quit
         for window in MacWindow.allWindowsMap.values {
             // makeAllWindowsVisibleAndRestoreSize may be invoked when something went wrong (e.g. some windows are unbound)

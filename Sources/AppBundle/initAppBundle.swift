@@ -29,7 +29,11 @@ import Foundation
             layoutWorkspaces: false,
         )
         try await runLightSession(.startup, .forceRun) {
-            smartLayoutAtStartup()
+            // The heuristic only has something to say when there is nothing to restore. Running it over a layout we
+            // just rebuilt would overwrite the root container's layout with a guess
+            if !restoreSavedLayout() {
+                smartLayoutAtStartup()
+            }
             _ = await config.afterStartupCommand.run(.defaultEnv, .emptyStdin)
         }
     }
