@@ -230,12 +230,22 @@ private func layoutMasterColumn(
     var point = point
     var virtualPoint = virtual.topLeftCorner
     let lastIndex = nodes.indices.last
+    // Same gap arithmetic as the tiles layout: the slot keeps its full size, the window is inset within it
+    let gaps = nodes.indices.map { rawGap - ($0 == 0 ? rawGap / 2 : 0) - ($0 == lastIndex ? rawGap / 2 : 0) }
+    // A window that refuses to shrink overlaps whatever follows it, so give it the room it insists on and take the
+    // difference from the windows that don't mind. Falls back to the plain proportional split when no window is
+    // constrained, or when the minimums can't all fit -- nothing avoids an overlap in that case anyway
+    let minimums = nodes.indices.map { i in
+        ((nodes[i] as? Window)?.minObservedExtent(orientation) ?? 0) + gaps[i]
+    }
+    let slots = distributeRespectingMinimums(shares: shares, minimums: minimums, available: physicalAvailable)
+        ?? shares.map { physicalAvailable * $0 / totalShare }
+
     for (i, child) in nodes.enumerated() {
-        let fraction = shares[i] / totalShare
-        let slot = physicalAvailable * fraction
+        let slot = slots[i]
+        let fraction = slot / physicalAvailable
         let virtualSlot = virtualAvailable * fraction
-        // Same gap arithmetic as the tiles layout: the slot keeps its full size, the window is inset within it
-        let gap = rawGap - (i == 0 ? rawGap / 2 : 0) - (i == lastIndex ? rawGap / 2 : 0)
+        let gap = gaps[i]
         try await child.layoutRecursive(
             i == 0 ? point : point.addingOffset(orientation, rawGap / 2),
             width: orientation == .h ? slot - gap : width,

@@ -397,6 +397,14 @@ demotes, resizes, rotates and reorients from there.
   Position in a `master` container is a window's role -- the leading slots are the master area -- so a drop inserts
   and shifts, where `tiles` and `accordion` swap the two windows instead.
   It differs from Hyprland's `drop_at_cursor` in taking no account of which half of the target the pointer is in.
+* A window that refuses to shrink -- Chrome will not go below about 375pt tall -- is given the room it insists on,
+  and the windows sharing its column give up the difference.
+  Without that it simply overlaps whatever is laid out after it, since an AX size is a request the app is free to
+  decline.
+  The minimum is learned by reading back what the window actually became after each resize, so it costs no extra
+  work and adjusts on its own if the app's minimum changes.
+  When the minimums in a column can't all fit, the ordinary proportional split is used: nothing avoids an overlap
+  at that point.
 * xref:commands.adoc#master[`master`] does everything master-specific: `swap-with-master`, `focus-master`,
   `add-master`, `remove-master`, `set-count`, `set-fraction`, `set-orientation`, `rotate-next`, `rotate-prev`.
 

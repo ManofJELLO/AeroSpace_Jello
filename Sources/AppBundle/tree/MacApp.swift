@@ -189,7 +189,15 @@ final class MacApp: AbstractApp {
             window.lastFrameRequest = request
             // Read back rather than assuming the window took what it was given. That is what lets the next pass
             // recognise a settled window whose app rounded the size to something of its own choosing
-            window.lastObservedFrame = window.ax.currentAxFrame()
+            let observed = window.ax.currentAxFrame()
+            window.lastObservedFrame = observed
+            // An app that came back bigger than it was asked for has a minimum, and the layout has to know so that
+            // it can take the difference from the windows that don't mind
+            if let size, let observedSize = observed.size {
+                Task.startUnstructured { @MainActor in
+                    Window.get(byId: windowId)?.noteSizeResponse(requested: size, observed: observedSize)
+                }
+            }
         }
     }
 

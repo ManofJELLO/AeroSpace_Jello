@@ -826,6 +826,45 @@ private func root(_ workspaceName: String) -> TilingContainer {
 
 /// A workspace whose tiling root is a `master` container holding `windowCount` windows with ids `1...windowCount`
 @MainActor
+final class MasterMinimumSizeTest: XCTestCase {
+    override func setUp() async throws { setUpWorkspacesForTests() }
+
+    func testAWindowThatRefusesToShrinkGetsItsRoomFromTheOthers() async throws {
+        let (workspace, windows) = masterWorkspace(focus.workspace.name, windowCount: 4)
+        // Three stack windows share a 1079pt column, so ~360 each. This one won't go below 500
+        windows[1].minObservedSize = CGSize(width: 0, height: 500)
+        try await workspace.layoutWorkspace()
+
+        assertApproxEquals(windows[1].lastAppliedLayoutPhysicalRect.orDie().height, 500)
+        // The other two give up the difference between them, and the column is still exactly filled
+        let heights = [windows[2], windows[3]].map { $0.lastAppliedLayoutPhysicalRect.orDie().height }
+        assertApproxEquals(heights[0], 289.5)
+        assertApproxEquals(heights[1], 289.5)
+        assertApproxEquals(heights.reduce(500, +), 1079)
+    }
+
+    func testMinimumsThatCannotFitLeaveTheLayoutAlone() async throws {
+        let (workspace, windows) = masterWorkspace(focus.workspace.name, windowCount: 3)
+        // Two stack windows, each insisting on more than the whole column. Nothing avoids an overlap, so the
+        // ordinary proportional split is what they get
+        windows[1].minObservedSize = CGSize(width: 0, height: 900)
+        windows[2].minObservedSize = CGSize(width: 0, height: 900)
+        try await workspace.layoutWorkspace()
+
+        assertApproxEquals(windows[1].lastAppliedLayoutPhysicalRect.orDie().height, 539.5)
+        assertApproxEquals(windows[2].lastAppliedLayoutPhysicalRect.orDie().height, 539.5)
+    }
+
+    func testAnUnconstrainedColumnIsUnaffected() async throws {
+        let (workspace, windows) = masterWorkspace(focus.workspace.name, windowCount: 3)
+        try await workspace.layoutWorkspace()
+
+        assertApproxEquals(windows[1].lastAppliedLayoutPhysicalRect.orDie().height, 539.5)
+        assertApproxEquals(windows[2].lastAppliedLayoutPhysicalRect.orDie().height, 539.5)
+    }
+}
+
+@MainActor
 private func masterWorkspace(
     _ workspaceName: String,
     windowCount: Int,
