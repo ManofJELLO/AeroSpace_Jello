@@ -63,6 +63,16 @@ import AppKit
     // Work out the window from the model before touching the AX API. Hovering tiled windows needs no AX request at
     // all, and that is what lets focus keep up with a pointer that is still moving
     let workspace = location.monitorApproximation.activeWorkspace
+
+    // A window macOS put in its own fullscreen space covers the whole screen, but it is no longer in the tiling
+    // tree -- the windows it left behind are, laid out underneath it. Resolving the pointer against that tree would
+    // focus one of them, and activating it yanks macOS straight back out of the fullscreen space. Checked per
+    // workspace, so a fullscreen app on one monitor doesn't stop focus following the pointer on another
+    if !workspace.macOsNativeFullscreenWindowsContainer.children.isEmpty {
+        hoveredSince = nil
+        return nil
+    }
+
     var window: Window? = nil
     for child in workspace.floatingWindowsContainer.mruChildren {
         try checkCancellation()
