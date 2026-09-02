@@ -7,6 +7,9 @@ private var activeRefreshTask: Task<(), any Error>? = nil
 @MainActor
 func scheduleCancellableCompleteRefreshSession(
     _ event: RefreshSessionEvent,
+    /// Pass `false` when the tree cannot have changed. Laying the workspaces out writes an AX frame for every visible
+    /// window, which is wasted work when the frames are the ones already on screen
+    layoutWorkspaces: Bool = true,
     optimisticallyPreLayoutWorkspaces: Bool = false,
 ) {
     activeRefreshTask?.cancel()
@@ -15,9 +18,30 @@ func scheduleCancellableCompleteRefreshSession(
         await runHeavyCompleteRefreshSession(
             event,
             assumeCancellable: true,
+            layoutWorkspaces: layoutWorkspaces,
             optimisticallyPreLayoutWorkspaces: optimisticallyPreLayoutWorkspaces,
         )
     }
+}
+
+/// The process AeroSpace itself just brought to the front, and the deadline for the activation notification it will
+/// produce.
+///
+/// macOS answers every focus change with `didActivateApplicationNotification`. When *we* caused the focus change that
+/// notification carries no news, and treating it as news costs two full layout passes over every visible workspace.
+/// Those passes write AX frames on the very app threads the next pointer move has to talk to
+@MainActor private var selfInflictedActivation: (pid: Int32, deadline: ContinuousClock.Instant)? = nil
+
+/// Claims the activation notification that focusing `window` is about to produce
+@MainActor func expectSelfInflictedActivation(of window: Window) {
+    selfInflictedActivation = (window.macAppUnsafe.pid, .now + .milliseconds(500))
+}
+
+/// Whether `pid` is the activation AeroSpace asked for, and it arrived before the request went stale
+@MainActor func consumeSelfInflictedActivation(_ pid: Int32?) -> Bool {
+    guard let expected = selfInflictedActivation, let pid, expected.pid == pid else { return false }
+    selfInflictedActivation = nil
+    return expected.deadline > .now
 }
 
 @MainActor
@@ -69,10 +93,18 @@ func runLightSession<T>(
     activeRefreshTask?.cancel() // Give priority to runSession
     activeRefreshTask = nil
     return try await $refreshSessionEvent.withValue(event) {
-        let nativeFocused = try await getNativeFocusedWindow(.cancellable)
-        if let nativeFocused { try await debugWindowsIfRecording(nativeFocused, .cancellable) }
-        updateFocusCache(nativeFocused)
-        let focusBefore = focus.windowOrNil
+        // Focus-follows-mouse already knows the window it is about to focus, so asking the *outgoing* app which
+        // window it considers focused buys nothing and blocks on that app's AX thread. It takes care of the focus
+        // cache and of the native focus itself, via noteFocusGivenTo and nativeFocus(raise:)
+        let focusBefore: Window?
+        if event.isFocusFollowsMouse {
+            focusBefore = nil
+        } else {
+            let nativeFocused = try await getNativeFocusedWindow(.cancellable)
+            if let nativeFocused { try await debugWindowsIfRecording(nativeFocused, .cancellable) }
+            updateFocusCache(nativeFocused)
+            focusBefore = focus.windowOrNil
+        }
 
         await refreshModel_nonCancellable()
         let result = try await body()
@@ -83,7 +115,7 @@ func runLightSession<T>(
         updateTrayText()
         SecureInputPanel.shared.refresh()
         if !event.isFocusFollowsMouse { try await layoutWorkspaces() }
-        if focusBefore != focusAfter {
+        if !event.isFocusFollowsMouse && focusBefore != focusAfter {
             focusAfter?.nativeFocus() // syncFocusToMacOs
         }
         if !event.isFocusFollowsMouse && scheduleCompleteRefresh { scheduleCancellableCompleteRefreshSession(event) }

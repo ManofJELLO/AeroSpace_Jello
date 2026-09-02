@@ -3,16 +3,25 @@ import Common
 
 enum GlobalObserver {
     private static func onNotif(_ notification: Notification) {
+        let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
         // Third line of defence against lock screen window. See: closedWindowsCache
         // Second and third lines of defence are technically needed only to avoid potential flickering
-        if (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier == lockScreenAppBundleId {
+        if app?.bundleIdentifier == lockScreenAppBundleId {
             return
         }
         let notifName = notification.name.rawValue
+        let pid = app?.processIdentifier
         Task.startUnstructured { @MainActor in
             if !TrayMenuModel.shared.isEnabled { return }
             if notifName == NSWorkspace.didActivateApplicationNotification.rawValue {
-                scheduleCancellableCompleteRefreshSession(.globalObserver(notifName), optimisticallyPreLayoutWorkspaces: true)
+                // An activation we asked for ourselves. The model already reflects it, and the tree is unchanged, so
+                // the layout passes would only rewrite the frames that are on screen already
+                let selfInflicted = consumeSelfInflictedActivation(pid)
+                scheduleCancellableCompleteRefreshSession(
+                    .globalObserver(notifName),
+                    layoutWorkspaces: !selfInflicted,
+                    optimisticallyPreLayoutWorkspaces: !selfInflicted,
+                )
             } else {
                 scheduleCancellableCompleteRefreshSession(.globalObserver(notifName))
             }

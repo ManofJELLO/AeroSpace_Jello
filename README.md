@@ -139,10 +139,11 @@ focus-follows-mouse.disable-key = 'control'  # hold to suspend. none|control|opt
 These map onto AutoRaise's `focusDelay`, `delay` (where `0` means "focus but never raise"), and `disableKey`.
 Defaults are unchanged, so an existing config behaves exactly as before.
 
-`delay-ms` costs nothing to implement because every mouse move already cancels the previous one's work, so the
-delay simply becomes "the pointer stopped here". AeroSpace is event-driven rather than polling, so AutoRaise's
-`pollMillis`, `mouseDelta` and `requireMouseStop` have no equivalent and don't need one. `warpX`/`warpY` is already
-covered by `on-focus-changed = ['move-mouse window-lazy-center']`.
+At `delay-ms = 0` focus tracks the pointer continuously, the way AutoRaise does, rather than waiting for it to
+come to a stop. Above 0 the pointer has to hold still for that long, which is AutoRaise's `focusDelay` and covers
+`requireMouseStop` too. AeroSpace is event-driven rather than polling, so `pollMillis` and `mouseDelta` have no
+equivalent and don't need one. `warpX`/`warpY` is already covered by
+`on-focus-changed = ['move-mouse window-lazy-center']`.
 
 ## Key features
 

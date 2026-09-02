@@ -93,8 +93,8 @@ persistent-workspaces = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B",
 on-mode-changed = []
 
 # Focus the window under the mouse pointer.
-# 'delay-ms' is how long the pointer has to rest over a window before focus moves. 0 focuses on the first
-#   mouse move; a small value like 50 stops windows stealing focus as the pointer sweeps across them
+# 'delay-ms' is how long the pointer has to rest over a window before focus moves. 0 tracks the pointer
+#   continuously; a small value like 50 stops windows stealing focus as the pointer sweeps across them
 # 'raise' also pulls the window in front of its app's other windows. Set false to move keyboard focus only
 # Possible values for 'disable-key': none|control|option|command|shift
 #   Hold it to suspend focus-follows-mouse, e.g. while reaching across a window to click something
