@@ -142,7 +142,14 @@ final class MacApp: AbstractApp {
             MacApp.focusJob = withWindowAsync(windowId, .cancellable) { [nsApp] window, job in
                 // Raise firstly to make sure that by the time we activate the app, the window would be already on top
                 window.set(Ax.isMainAttr, true)
-                if raise { AXUIElementPerformAction(window, kAXRaiseAction as CFString) }
+                if raise {
+                    AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+                } else {
+                    // kAXRaise both focuses the window and pulls it in front of its app's siblings, so asking not to
+                    // raise means asking for the focus half on its own. Without this the window is only marked as the
+                    // app's main window, which on its own doesn't move the keyboard focus
+                    window.set(Ax.isFocused, true)
+                }
                 nsApp.activate(options: .activateIgnoringOtherApps)
             }
         }

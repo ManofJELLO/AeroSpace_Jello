@@ -236,9 +236,10 @@ enum Ax {
         getter: { $0 as? Bool },
         setter: { $0 as CFTypeRef },
     )
-    static let isFocused = ReadableAttrImpl<Bool>(
+    static let isFocused = WritableAttrImpl<Bool>(
         key: kAXFocusedAttribute,
         getter: { $0 as? Bool },
+        setter: { $0 as CFTypeRef },
     )
     static let isMainAttr = WritableAttrImpl<Bool>(
         key: kAXMainAttribute,

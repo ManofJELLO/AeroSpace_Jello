@@ -8,8 +8,12 @@
 #
 # Deliberately skips build-docs.sh and build-shell-completion.sh (they require
 # Ruby gems and Rust). That means no man pages and no shell completions.
-# Everything else matches upstream's build-release.sh, including the ad-hoc
-# codesign identity ("-") that upstream CI itself uses.
+#
+# Signs with the stable self-signed 'aerospace-codesign-certificate' identity,
+# same as upstream's build-release.sh. Run ./script/create-codesign-certificate.sh
+# once to create it. Without a stable signature TCC re-prompts for Accessibility
+# on every upgrade, because it keys the permission on the code signature and
+# ad-hoc signing gives a different one to every build.
 
 cd "$(dirname "$0")"
 
@@ -123,13 +127,29 @@ step "Generating version metadata"
 step "Building universal CLI"
 swift build -c release --arch arm64 --arch x86_64 --product aerospace
 
+########################
+### Codesign identity ##
+########################
+
+# A stable signature is what lets TCC keep its Accessibility grant across
+# upgrades. Fall back to ad-hoc rather than refusing to build, but say so
+# loudly, because the fallback costs the user their Accessibility permission.
+readonly CODESIGN_IDENTITY="aerospace-codesign-certificate"
+if security find-identity -v -p codesigning | grep "$CODESIGN_IDENTITY" > /dev/null; then
+    codesign_identity="$CODESIGN_IDENTITY"
+else
+    codesign_identity="-"
+    echo
+    echo "warning: '$CODESIGN_IDENTITY' not found in the keychain, falling back to"
+    echo "warning: ad-hoc signing. macOS will revoke AeroSpace's Accessibility"
+    echo "warning: permission on upgrade. Fix with ./script/create-codesign-certificate.sh"
+fi
+
 step "Building AeroSpace.app"
 # The log goes in .release/ because that path is gitignored. Writing it anywhere
 # else would leave the tree dirty and trip this script's own clean-tree preflight
 # on the next run.
 rm -rf .release && mkdir -p .release
-# CODE_SIGN_IDENTITY="-" is ad-hoc signing, exactly what upstream CI does.
-# It avoids needing the self-signed 'aerospace-codesign-certificate' from Keychain.
 (
     cd ./xcode
     xcodebuild clean build \
@@ -137,7 +157,7 @@ rm -rf .release && mkdir -p .release
         -destination "generic/platform=macOS" \
         -configuration Release \
         -derivedDataPath .xcode-build \
-        CODE_SIGN_IDENTITY="-" \
+        CODE_SIGN_IDENTITY="$codesign_identity" \
         CODE_SIGN_STYLE=Manual \
         DEVELOPMENT_TEAM="" \
         > ../.release/xcodebuild.log 2>&1 \
@@ -159,7 +179,7 @@ test -f "$cli_src" || die "missing $cli_src"
 mkdir -p ".release/$zip_root/bin"
 cp -r "$app_src" ".release/$zip_root/"
 cp "$cli_src" ".release/$zip_root/bin/"
-codesign --force --sign - ".release/$zip_root/bin/aerospace"
+codesign --force --sign "$codesign_identity" ".release/$zip_root/bin/aerospace"
 if test -d legal; then cp -r legal ".release/$zip_root/legal"; fi
 
 # Sanity: both binaries must be universal, and must carry this commit's hash.
@@ -203,7 +223,7 @@ gh release create "$tag" ".release/$zip_name" \
 See the README for details.
 
 Built from commit $(git rev-parse HEAD).
-Ad-hoc signed, universal binary (arm64 + x86_64).
+Self-signed, universal binary (arm64 + x86_64).
 No man pages or shell completions in this build.
 
 \`\`\`bash
