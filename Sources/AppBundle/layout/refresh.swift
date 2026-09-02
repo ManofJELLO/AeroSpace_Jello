@@ -30,11 +30,22 @@ func scheduleCancellableCompleteRefreshSession(
 /// macOS answers every focus change with `didActivateApplicationNotification`. When *we* caused the focus change that
 /// notification carries no news, and treating it as news costs two full layout passes over every visible workspace.
 /// Those passes write AX frames on the very app threads the next pointer move has to talk to
-@MainActor private var selfInflictedActivation: (pid: Int32, deadline: ContinuousClock.Instant)? = nil
+@MainActor private var selfInflictedActivation: (pid: Int32, windowId: UInt32, deadline: ContinuousClock.Instant)? = nil
 
 /// Claims the activation notification that focusing `window` is about to produce
 @MainActor func expectSelfInflictedActivation(of window: Window) {
-    selfInflictedActivation = (window.macAppUnsafe.pid, .now + .milliseconds(500))
+    selfInflictedActivation = (window.macAppUnsafe.pid, window.windowId, .now + .milliseconds(500))
+}
+
+/// Whether AeroSpace has asked macOS to focus some window other than `nativeFocused`, and is still waiting for that
+/// to happen.
+///
+/// The focus request is carried out on the target app's own thread, so for a moment afterwards macOS still reports
+/// the previous window as focused. Believing it would revert the model to a window the pointer has already left, and
+/// nothing would put it right until the pointer moved again
+@MainActor func isAwaitingSelfInflictedFocus(insteadOf nativeFocused: Window?) -> Bool {
+    guard let pending = selfInflictedActivation, pending.deadline > .now else { return false }
+    return pending.windowId != nativeFocused?.windowId
 }
 
 /// Whether `pid` is the activation AeroSpace asked for, and it arrived before the request went stale

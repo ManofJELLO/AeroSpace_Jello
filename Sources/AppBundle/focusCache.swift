@@ -7,6 +7,10 @@
     if nativeFocused?.parent is MacosPopupWindowsContainer {
         return
     }
+    // A focus change we asked for is still on its way. Taking macOS at its word here would undo it
+    if isAwaitingSelfInflictedFocus(insteadOf: nativeFocused) {
+        return
+    }
     if nativeFocused?.windowId != lastKnownNativeFocusedWindowId {
         _ = nativeFocused?.focusWindow()
         lastKnownNativeFocusedWindowId = nativeFocused?.windowId
