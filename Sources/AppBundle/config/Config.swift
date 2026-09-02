@@ -49,6 +49,9 @@ struct Config: ConvenienceMutable {
     /// Rearrange the layout while a window is being dragged, instead of only when the button is released.
     /// The preview is provisional: dragging back to where you started restores the original arrangement
     var liveDragPreview: Bool = false
+    /// Keep floating windows above tiled ones, across apps. Off leaves stacking entirely to macOS, which layers by
+    /// app, so focusing any window of another app buries every floating window
+    var floatingWindowsOnTop: Bool = true
     var master: MasterConfig = MasterConfig()
     var enableNormalizationOppositeOrientationForNestedContainers: Bool = true
     var persistentWorkspaces: OrderedSet<String> = []

@@ -631,6 +631,12 @@ final class ConfigTest: XCTestCase {
         assertEquals(result.config.focusFollowsMouse.disableKey, .none)
     }
 
+    func testParseFloatingWindowsOnTop() {
+        assertEquals(parseConfig("").config.floatingWindowsOnTop, true)
+        assertEquals(parseConfig("floating-windows-on-top = false").config.floatingWindowsOnTop, false)
+        assertEquals(parseConfig("floating-windows-on-top = false").errors, [])
+    }
+
     func testParseFocusFollowsMouseErrors() {
         assertEquals(
             parseConfig("focus-follows-mouse.delay-ms = -1").strErrors,

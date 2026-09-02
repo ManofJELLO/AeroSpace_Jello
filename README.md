@@ -145,6 +145,23 @@ come to a stop. Above 0 the pointer has to hold still for that long, which is Au
 equivalent and don't need one. `warpX`/`warpY` is already covered by
 `on-focus-changed = ['move-mouse window-lazy-center']`.
 
+### Floating windows that stay on top
+
+macOS stacks windows by *app*, not by window. Focusing any window of another app therefore puts **all** of that app's
+windows above **all** of yours -- so a floating dialog, like a Settings window, gets buried the moment you touch
+something else. With focus-follows-mouse on, that happens just by moving the pointer across a tiled window.
+
+`floating-windows-on-top` keeps them up:
+
+```toml
+floating-windows-on-top = true   # the default in this fork; false restores upstream behavior
+```
+
+`kAXRaiseAction` cannot fix this -- it only reorders windows within a single app. Crossing app boundaries means
+setting the window's *level*, so this uses the private SkyLight call `SLSSetWindowLevel`, the same mechanism behind
+yabai's `--layer above`. It is resolved with `dlsym` at run time rather than linked, so a macOS release that drops the
+symbol costs the feature and nothing else: every window simply keeps the level macOS gave it.
+
 ## Key features
 
 - Tiling window manager based on a [tree paradigm](https://nikitabobko.github.io/AeroSpace/guide#tree)
