@@ -667,48 +667,42 @@ final class MasterMouseDropTest: XCTestCase {
         return (workspace, windows)
     }
 
-    func testDroppingBelowAWindowsMiddleInsertsAfterIt() async throws {
+    func testDroppingOnAWindowTradesPlacesWithIt() async throws {
         let (workspace, windows) = try await stackWorkspace()
 
-        // Lower half of windows[2], the middle stack window
+        // windows[2], the middle stack window
         moveTilingWindow(windows[1], cursor: CGPoint(x: 1500, y: 600))
 
         assertEquals(workspace.rootTilingContainer.layoutDescription,
                      .h_master([.window(1), .window(3), .window(2), .window(4)]))
     }
 
-    func testDroppingAboveAWindowsMiddleInsertsBeforeIt() async throws {
-        let (workspace, windows) = try await stackWorkspace()
+    func testWhichHalfOfTheTargetTheCursorIsInMakesNoDifference() async throws {
+        for y in [400, 500, 600, 700] {
+            setUpWorkspacesForTests()
+            let (workspace, windows) = try await stackWorkspace()
 
-        // Upper half of windows[2], the middle stack window
-        moveTilingWindow(windows[3], cursor: CGPoint(x: 1500, y: 400))
+            // Anywhere inside windows[2] means the same thing: put the dragged window there
+            moveTilingWindow(windows[3], cursor: CGPoint(x: 1500, y: CGFloat(y)))
 
-        assertEquals(workspace.rootTilingContainer.layoutDescription,
-                     .h_master([.window(1), .window(2), .window(4), .window(3)]))
+            assertEquals(workspace.rootTilingContainer.layoutDescription,
+                         .h_master([.window(1), .window(2), .window(4), .window(3)]))
+        }
     }
 
-    func testDroppingOnTheMasterPromotesTheWindow() async throws {
-        let (workspace, windows) = try await stackWorkspace()
+    func testDroppingAnywhereOnTheMasterPromotesTheWindow() async throws {
+        // The master column spans the full height, so its midpoint sits halfway down it. A rule that weighed the
+        // cursor against that midpoint answered "the slot after the master" for the lower half -- the top of the
+        // stack, the opposite of what the cursor was pointing at
+        for y in [100, 900] {
+            setUpWorkspacesForTests()
+            let (workspace, windows) = try await stackWorkspace()
 
-        // Upper half of the master column
-        moveTilingWindow(windows[2], cursor: CGPoint(x: 500, y: 100))
+            moveTilingWindow(windows[2], cursor: CGPoint(x: 500, y: CGFloat(y)))
 
-        // The dragged window takes the master slot and the rest shift down one. A swap would instead have dropped
-        // the old master into windows[2]'s old slot
-        assertEquals(workspace.rootTilingContainer.layoutDescription,
-                     .h_master([.window(3), .window(1), .window(2), .window(4)]))
-    }
-
-    func testDroppingOnTheNearHalfOfANeighbourTradesPlacesWithIt() async throws {
-        let (workspace, windows) = try await stackWorkspace()
-
-        // The lower half of windows[1] resolves to the slot windows[2] already occupies, so inserting there would
-        // be a no-op. The drop was aimed at another window though, so they trade places instead: otherwise swapping
-        // two stacked windows means dragging past the far window's midpoint, most of its height
-        moveTilingWindow(windows[2], cursor: CGPoint(x: 1500, y: 340))
-
-        assertEquals(workspace.rootTilingContainer.layoutDescription,
-                     .h_master([.window(1), .window(3), .window(2), .window(4)]))
+            assertEquals(workspace.rootTilingContainer.layoutDescription,
+                         .h_master([.window(3), .window(2), .window(1), .window(4)]))
+        }
     }
 
     func testDroppingAWindowBackOnItsOwnSlotChangesNothing() async throws {
@@ -728,12 +722,11 @@ final class MasterMouseDropTest: XCTestCase {
         let nestedWindow = TestWindow.new(id: 3, parent: nested)
         try await workspace.layoutWorkspace()
 
-        // Upper half of the master column
         moveTilingWindow(nestedWindow, cursor: CGPoint(x: 500, y: 100))
 
-        // The emptied nested container is left behind for the next normalizeContainers() pass to collect
+        // A trade, so the old master takes the nested window's place rather than the nested container being emptied
         assertEquals(workspace.rootTilingContainer.layoutDescription,
-                     .h_master([.window(3), .window(1), .window(2), .v_tiles([])]))
+                     .h_master([.window(3), .window(2), .v_tiles([.window(1)])]))
     }
 
     func testADragBackToWhereItStartedChangesNothing() async throws {
@@ -757,7 +750,7 @@ final class MasterMouseDropTest: XCTestCase {
         commitTilingDragIfNeeded(cursor: CGPoint(x: 500, y: 100))
 
         assertEquals(workspace.rootTilingContainer.layoutDescription,
-                     .h_master([.window(4), .window(1), .window(2), .window(3)]))
+                     .h_master([.window(4), .window(2), .window(3), .window(1)]))
         assertNil(currentlyDraggedWithMouseWindowId)
     }
 
@@ -770,7 +763,7 @@ final class MasterMouseDropTest: XCTestCase {
 
         // With the flag on the tree changes while the drag is still in flight
         assertEquals(workspace.rootTilingContainer.layoutDescription,
-                     .h_master([.window(4), .window(1), .window(2), .window(3)]))
+                     .h_master([.window(4), .window(2), .window(3), .window(1)]))
     }
 
     func testLivePreviewIsProvisional() async throws {

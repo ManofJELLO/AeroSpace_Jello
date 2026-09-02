@@ -255,13 +255,12 @@ private func planTilingDrop(_ window: Window, cursor: CGPoint, rects: [UInt32: R
         )
     }
     guard let dropTarget else { return nil }
-    // A 'master' container is an ordered list of slots rather than a spatial tree, so dropping into one inserts the
-    // window at the cursor and shifts the rest along, the way Hyprland's 'drop_at_cursor' does. Every other layout
-    // keeps AeroSpace's "swap with the window underneath" behavior
-    guard let masterParent = (dropTarget.parent as? TilingContainer)?.takeIf({ $0.layout == .master }) else {
-        return .swap(with: dropTarget)
-    }
-    return planMasterDrop(window, onto: dropTarget, in: masterParent, cursor: cursor, rects: rects)
+    // The dragged window goes where the pointer is: it trades places with whatever window the pointer was released
+    // over, in every layout. Which half of that window the pointer landed in doesn't come into it. A pointer one
+    // pixel inside the master area is asking for the master slot, and a rule that weighed it against the master's
+    // midpoint would answer "the slot after the master", which is the top of the stack -- the opposite of what was
+    // pointed at
+    return .swap(with: dropTarget)
 }
 
 /// The window the cursor is over, ignoring the dragged one. A dragged window has no rect of its own, so hovering
@@ -287,40 +286,6 @@ extension Window {
     fileprivate func rectForDrop(_ rects: [UInt32: Rect]?) -> Rect? {
         rects.map { $0[windowId] } ?? lastAppliedLayoutPhysicalRect
     }
-}
-
-/// Inserts `window` next to `target`, before or after it depending on which side of `target`'s midpoint the cursor
-/// sits on. Dropping onto the master area therefore promotes the window to master and pushes the rest down
-@MainActor
-private func planMasterDrop(
-    _ window: Window,
-    onto target: Window,
-    in parent: TilingContainer,
-    cursor: CGPoint,
-    rects: [UInt32: Rect]?,
-) -> TilingDrop? {
-    guard let targetRect = target.rectForDrop(rects), let targetIndex = target.ownIndex else {
-        return .swap(with: target)
-    }
-    let axis = parent.weightOrientation
-    var index = cursor.getProjection(axis) > targetRect.center.getProjection(axis) ? targetIndex + 1 : targetIndex
-    let cameFromTheSameContainer = window.parent === parent
-    if cameFromTheSameContainer, let sourceIndex = window.ownIndex {
-        // The window is about to leave this very list, so every slot past it shifts down by one
-        if index > sourceIndex { index -= 1 }
-        // Landing on the near half of a neighbour resolves to the slot the window already occupies. Inserting there
-        // would be a no-op, but the drop was deliberately made onto another window, so trade places with it instead
-        // of quietly doing nothing -- otherwise swapping two stacked windows means dragging past the far window's
-        // midpoint, which for a tall window is most of its height. Dropping a window back on its own slot is the
-        // case that cancels a drag, and that is caught earlier: a window is never its own drop target
-        if index == sourceIndex { return .swap(with: target) }
-    }
-    return .bind(
-        parent: parent,
-        index: index,
-        // Keep the size it already had in this column. Arriving from elsewhere, take an even share
-        adaptiveWeight: cameFromTheSameContainer ? window.getWeight(axis) : WEIGHT_AUTO,
-    )
 }
 
 extension CGPoint {
