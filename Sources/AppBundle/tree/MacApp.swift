@@ -168,10 +168,27 @@ final class MacApp: AbstractApp {
 
     func setAxFrame(_ windowId: UInt32, _ topLeft: CGPoint?, _ size: CGSize?) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
-        setFrameJobs[windowId] = withWindowAsync(windowId, .cancellable) { [axApp] window, job in
-            try disableAnimations(app: axApp.threadGuarded, job) {
-                try setFrame(window, topLeft, size, job)
+        setFrameJobs[windowId] = withAxWindowAsync(windowId, .cancellable) { [axApp] window, job in
+            // Writing a frame costs up to six AX round trips: reading and toggling the enhanced-user-interface
+            // attribute, then size, position, size again. Most layout passes ask for frames the windows are already
+            // at -- a focus change re-lays out every visible window without moving any of them -- and two reads
+            // settle that far more cheaply
+            let request = AxFrame(topLeft: topLeft, size: size)
+            if canSkipFrameWrite(
+                request: request,
+                lastRequest: window.lastFrameRequest,
+                lastObserved: window.lastObservedFrame,
+                current: window.ax.currentAxFrame(),
+            ) {
+                return
             }
+            try disableAnimations(app: axApp.threadGuarded, job) {
+                try setFrame(window.ax, topLeft, size, job)
+            }
+            window.lastFrameRequest = request
+            // Read back rather than assuming the window took what it was given. That is what lets the next pass
+            // recognise a settled window whose app rounded the size to something of its own choosing
+            window.lastObservedFrame = window.ax.currentAxFrame()
         }
     }
 
@@ -371,9 +388,15 @@ final class MacApp: AbstractApp {
     }
 
     private func withWindowAsync(_ windowId: UInt32, _ cm: CancellationMode, _ body: @Sendable @escaping (AXUIElement, RunLoopJob) throws -> ()) -> RunLoopJob {
+        withAxWindowAsync(windowId, cm) { window, job in try body(window.ax, job) }
+    }
+
+    /// Hands the whole window over, not just its `AXUIElement`, for callers that keep per-window state on the app's
+    /// own thread
+    private func withAxWindowAsync(_ windowId: UInt32, _ cm: CancellationMode, _ body: @Sendable @escaping (AxWindow, RunLoopJob) throws -> ()) -> RunLoopJob {
         thread?.runInLoopAsync(job: RunLoopJob(cm)) { [windows] job in
             guard let window = windows.threadGuarded[windowId] else { return }
-            try? body(window.ax, job)
+            try? body(window, job)
         } ?? .cancelled
     }
 }
@@ -381,6 +404,10 @@ final class MacApp: AbstractApp {
 private final class AxWindow {
     let windowId: UInt32
     let ax: AXUIElement
+    /// The frame last asked for, and the frame the window reported once it had settled. Only ever touched on the
+    /// app's own thread, which is where every frame write is carried out
+    var lastFrameRequest: AxFrame? = nil
+    var lastObservedFrame: AxFrame? = nil
     // periphery:ignore
     private let axSubscriptions: [AxSubscription] // keep subscriptions in memory
 
@@ -452,4 +479,10 @@ private func disableAnimations<T>(app: AXUIElement, _ job: RunLoopJob, _ body: (
     }
     try job.checkCancellation()
     return try body()
+}
+
+extension AXUIElement {
+    fileprivate func currentAxFrame() -> AxFrame {
+        AxFrame(topLeft: get(Ax.topLeftCornerAttr), size: get(Ax.sizeAttr))
+    }
 }
