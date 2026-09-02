@@ -255,12 +255,30 @@ private func planTilingDrop(_ window: Window, cursor: CGPoint, rects: [UInt32: R
         )
     }
     guard let dropTarget else { return nil }
-    // The dragged window goes where the pointer is: it trades places with whatever window the pointer was released
-    // over, in every layout. Which half of that window the pointer landed in doesn't come into it. A pointer one
-    // pixel inside the master area is asking for the master slot, and a rule that weighed it against the master's
-    // midpoint would answer "the slot after the master", which is the top of the stack -- the opposite of what was
+    // The dragged window goes where the pointer is. Which half of the target the pointer landed in doesn't come
+    // into it: one pixel inside the master area is asking for the master slot, and weighing that against the
+    // master's midpoint would answer "the slot after the master" -- the top of the stack, the opposite of what was
     // pointed at
-    return .swap(with: dropTarget)
+    guard let masterParent = (dropTarget.parent as? TilingContainer)?.takeIf({ $0.layout == .master }),
+          let targetIndex = dropTarget.ownIndex
+    else {
+        // 'tiles' and 'accordion' keep AeroSpace's "swap with the window underneath" behavior
+        return .swap(with: dropTarget)
+    }
+    // In a 'master' container a child's position is its role -- the leading slots are the master area -- so the
+    // window takes the target's slot and the rest shift along by one. Swapping would fling the window that was
+    // pointed at all the way down to the dragged window's old slot instead of moving it over by one.
+    //
+    // `bind` unbinds before it inserts, so the target's own index is the right insertion point whichever direction
+    // the window came from: from below, the target hasn't moved and the window lands in front of it; from above,
+    // the target has shifted up by one and the window lands on the slot it vacated
+    let axis = masterParent.weightOrientation
+    return .bind(
+        parent: masterParent,
+        index: targetIndex,
+        // Keep the size it already had in this column. Arriving from elsewhere, take an even share
+        adaptiveWeight: window.parent === masterParent ? window.getWeight(axis) : WEIGHT_AUTO,
+    )
 }
 
 /// The window the cursor is over, ignoring the dragged one. A dragged window has no rect of its own, so hovering
