@@ -842,6 +842,29 @@ private func root(_ workspaceName: String) -> TilingContainer {
 
 /// A workspace whose tiling root is a `master` container holding `windowCount` windows with ids `1...windowCount`
 @MainActor
+final class MasterRotateMruTest: XCTestCase {
+    override func setUp() async throws { setUpWorkspacesForTests() }
+
+    func testRotatingKeepsTheMostRecentlyUsedOrder() async {
+        let (workspace, windows) = masterWorkspace(focus.workspace.name, windowCount: 4)
+        let root = workspace.rootTilingContainer
+        // An order deliberately unlike slot order, so a reset to slot order is visible
+        windows[3].markAsMostRecentChild()
+        windows[1].markAsMostRecentChild()
+        let before = Array(root.mruChildren).compactMap { ($0 as? Window)?.windowId }
+
+        await parseCommand("master rotate-next").cmdOrDie.run(.defaultEnv, .emptyStdin)
+
+        // Rotating rebinds every child, and bind() marks each one most-recent as it goes. Without replaying the
+        // captured order the stack collapses to slot order, and swap-with-master, focus-master and cross-column
+        // moves -- all of which pick their counterpart from the MRU -- start jumping to arbitrary windows
+        let focused = focus.windowOrNil.orDie().windowId
+        let expected = [focused] + before.filter { $0 != focused }
+        assertEquals(Array(root.mruChildren).compactMap { ($0 as? Window)?.windowId }, expected)
+    }
+}
+
+@MainActor
 final class MasterOrientationOwnershipTest: XCTestCase {
     override func setUp() async throws { setUpWorkspacesForTests() }
 

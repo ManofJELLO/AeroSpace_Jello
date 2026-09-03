@@ -29,8 +29,11 @@ final class TestWindow: Window, CustomStringConvertible {
 
     @MainActor
     override func nativeFocus(raise: Bool) {
-        appForTests = TestApp.shared
-        TestApp.shared.focusedWindow = self
+        // The window's own app, not TestApp.shared. A window belonging to TestApp.other would otherwise record its
+        // focus against the wrong app, and any cross-app assertion would be checking a state production never has
+        let app = self.app as! TestApp
+        appForTests = app
+        app.focusedWindow = self
     }
 
     override func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) {

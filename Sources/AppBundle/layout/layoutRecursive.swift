@@ -219,6 +219,9 @@ private func layoutMasterColumn(
     _ context: LayoutContext,
 ) async throws {
     if nodes.isEmpty { return }
+    // Inner gaps can consume a narrow container entirely. Every slot would then be 0 and the fraction below 0/0,
+    // and the NaN would travel into lastAppliedLayoutVirtualRect, which the resize paths read back
+    if (orientation == .h ? width : height) <= 0 { return }
     let shares = nodes.map { max($0.getWeight(orientation), MASTER_MIN_SHARE) }
     let totalShare = shares.reduce(0, +)
     guard totalShare > 0 else { return }

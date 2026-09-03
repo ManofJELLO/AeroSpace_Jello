@@ -139,8 +139,12 @@ func runLightSession<T>(
             focusAfter?.nativeFocus() // syncFocusToMacOs
         }
         // A focus-follows-mouse session lays out nothing and schedules nothing, which is what keeps it quick. That
-        // is only safe when it had nothing to swallow: having cancelled a pending refresh, it owes one back
-        if (!event.isFocusFollowsMouse && scheduleCompleteRefresh) || cancelledPendingRefresh {
+        // is only safe when it had nothing to swallow -- having cancelled a pending refresh, it owes one back --
+        // and when nothing it ran could have changed the tree. An on-focus-changed callback can move, resize or
+        // re-parent a window, and skipping the layout would leave that change invisible until something else
+        // happened to trigger one
+        let mayHaveChangedTheTree = event.isFocusFollowsMouse && !config.onFocusChanged.isEmpty
+        if (!event.isFocusFollowsMouse && scheduleCompleteRefresh) || cancelledPendingRefresh || mayHaveChangedTheTree {
             scheduleCancellableCompleteRefreshSession(event)
         }
         return result

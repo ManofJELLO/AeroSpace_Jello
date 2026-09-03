@@ -17,7 +17,9 @@ func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableR
             // The button is already up. If it only just came up after travelling, this is the tail of a drag whose
             // notifications lost their race with the release -- which is what a very quick flick looks like. Apply
             // it where the button actually came up, rather than throwing the drag away
-            if window.parent is TilingContainer, let cursor = consumeLateDrag(for: window.windowId) {
+            if window.parent is TilingContainer, let cursor = consumeLateDrag(for: window.windowId),
+               try await window.hasLeftItsSlot()
+            {
                 try await runLightSession(.ax(notif), token) {
                     moveTilingWindow(window, cursor: cursor)
                     // moveTilingWindow marks the window as mouse-manipulated, and the layout at the end of this
@@ -293,6 +295,10 @@ private func dropTargetWindow(
     excluding window: Window,
     rects: [UInt32: Rect]?,
 ) -> Window? {
+    // The frozen rects describe the workspace the drag started in, and only that one. Another monitor's windows
+    // aren't in them, so consulting them there finds no target and every cross-monitor drop lands at index 0.
+    // Those windows aren't being rearranged by the preview anyway, so their live rects are the honest answer
+    let rects = workspace == window.nodeWorkspace ? rects : nil
     guard let rects else {
         return cursor
             .findWindowRecursively(in: workspace.rootTilingContainer, virtual: false, fullscreenCoversAll: false)?
@@ -303,6 +309,19 @@ private func dropTargetWindow(
 }
 
 extension Window {
+    /// Whether the window actually sits somewhere other than where the layout put it.
+    ///
+    /// A press resolves to whatever tiled window is under the pointer, which may be one the user never dragged --
+    /// they were selecting text, or pressing a floating window on top of it. Something else moving that window
+    /// within the grace period would otherwise be mistaken for the tail of a drag, and it would be flung to the
+    /// release point. A window the layout itself moved is still exactly where the layout put it
+    @MainActor
+    fileprivate func hasLeftItsSlot() async throws -> Bool {
+        guard let slot = lastAppliedLayoutPhysicalRect else { return true }
+        guard let actual = try await getAxRect(.cancellable) else { return false }
+        return abs(actual.topLeftX - slot.topLeftX) > 2 || abs(actual.topLeftY - slot.topLeftY) > 2
+    }
+
     @MainActor
     fileprivate func rectForDrop(_ rects: [UInt32: Rect]?) -> Rect? {
         rects.map { $0[windowId] } ?? lastAppliedLayoutPhysicalRect

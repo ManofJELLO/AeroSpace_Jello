@@ -110,11 +110,17 @@ extension TilingContainer {
             return .fail(io.err("Nothing to rotate. The master container holds fewer than two windows"))
         }
         let weights = nodes.map { $0.getWeight(weightOrientation) }
+        // Captured before the rebuild: bind() marks each child most-recent as it goes, so without replaying this
+        // the MRU stack ends up as plain slot order. swap-with-master, focus-master and cross-column moves all
+        // choose their counterpart from the MRU, and would start jumping to arbitrary windows after one rotate
+        let mruOrder = Array(mruChildren)
         for node in nodes { node.unbindFromParent() }
         for slot in 0 ..< count {
             let node = nodes[((slot + offset) % count + count) % count]
             node.bind(to: self, adaptiveWeight: weights[slot], index: slot)
         }
+        // Oldest first, so the most recent ends up on top again
+        for node in mruOrder.reversed() { node.markAsMostRecentChild() }
         guard let windowToFocus = masterChildren.first?.mostRecentWindowRecursive else {
             return .fail(io.err(bugPrompt()))
         }

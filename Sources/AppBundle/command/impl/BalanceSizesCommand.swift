@@ -4,7 +4,10 @@ import Foundation
 
 struct BalanceSizesCommand: Command {
     let args: BalanceSizesCmdArgs
-    /*conforms*/ let shouldResetClosedWindowsCache = true
+    // Doesn't change the tree, so a window closed just before this still belongs in its old slot when it reopens.
+    // It does rewrite the weights that a fullscreen snapshot captured, so that snapshot has to go
+    /*conforms*/ let shouldResetClosedWindowsCache = false
+    /*conforms*/ let shouldResetMacosFullscreenSnapshots = true
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> BinaryExitCode {
         guard let target = args.resolveTargetOrReportError(env, io) else { return .fail }

@@ -16,6 +16,7 @@ final class MacApp: AbstractApp {
     var lastNativeFocusedWindowId: UInt32? = nil
     private var thread: Thread?
     private var setFrameJobs: [UInt32: RunLoopJob] = [:]
+    private var raiseJobs: [UInt32: RunLoopJob] = [:]
     @MainActor private static var focusJob: RunLoopJob? = nil
 
     /*conforms*/ var name: String? { nsApp.localizedName }
@@ -161,7 +162,11 @@ final class MacApp: AbstractApp {
     /// window ends up above the window that was just focused
     @MainActor func raiseWithoutFocus(_ windowId: UInt32) {
         if serverArgs.isReadOnly { return }
-        _ = withWindowAsync(windowId, .cancellable) { window, job in
+        // Tracked and superseded like setFrameJobs. Focus-follows-mouse calls this on every hover, and against an
+        // app slow to service AX the untracked jobs would queue up without bound, each one posting notifications
+        // that feed straight back into refresh sessions
+        raiseJobs.removeValue(forKey: windowId)?.cancel()
+        raiseJobs[windowId] = withWindowAsync(windowId, .cancellable) { window, job in
             AXUIElementPerformAction(window, kAXRaiseAction as CFString)
         }
     }
@@ -175,11 +180,25 @@ final class MacApp: AbstractApp {
             // at -- a focus change re-lays out every visible window without moving any of them -- and two reads
             // settle that far more cheaply
             let request = AxFrame(topLeft: topLeft, size: size)
+            let current = window.ax.currentAxFrame()
+            // Judge the *previous* request by this read, not by the one taken immediately after writing it. An app
+            // applies an AX resize asynchronously -- that is why setFrame writes the size twice -- so reading back
+            // straight away can return the size from before the write. A minimum learned from that is never
+            // un-learned, because the layout then stops asking for anything smaller and the bogus figure keeps
+            // confirming itself
+            if let previous = window.lastFrameRequest?.size, let settled = current.size,
+               abs(settled.width - previous.width) > axSizeRefusalTolerance
+               || abs(settled.height - previous.height) > axSizeRefusalTolerance
+            {
+                Task.startUnstructured { @MainActor in
+                    Window.get(byId: windowId)?.noteSizeResponse(requested: previous, observed: settled)
+                }
+            }
             if !force, canSkipFrameWrite(
                 request: request,
                 lastRequest: window.lastFrameRequest,
                 lastObserved: window.lastObservedFrame,
-                current: window.ax.currentAxFrame(),
+                current: current,
             ) {
                 return
             }
@@ -189,15 +208,9 @@ final class MacApp: AbstractApp {
             window.lastFrameRequest = request
             // Read back rather than assuming the window took what it was given. That is what lets the next pass
             // recognise a settled window whose app rounded the size to something of its own choosing
-            let observed = window.ax.currentAxFrame()
-            window.lastObservedFrame = observed
-            // An app that came back bigger than it was asked for has a minimum, and the layout has to know so that
-            // it can take the difference from the windows that don't mind
-            if let size, let observedSize = observed.size {
-                Task.startUnstructured { @MainActor in
-                    Window.get(byId: windowId)?.noteSizeResponse(requested: size, observed: observedSize)
-                }
-            }
+            // Only for the frame cache. Unlike a learned minimum this is self-correcting: if the read is stale the
+            // next pass sees a mismatch and simply writes again
+            window.lastObservedFrame = window.ax.currentAxFrame()
         }
     }
 
@@ -371,6 +384,7 @@ final class MacApp: AbstractApp {
         windowsCount = alive.count
         for windowId in dead {
             setFrameJobs.removeValue(forKey: windowId)?.cancel()
+            raiseJobs.removeValue(forKey: windowId)?.cancel()
         }
         return alive
     }
@@ -381,6 +395,10 @@ final class MacApp: AbstractApp {
             job.cancel()
         }
         setFrameJobs = [:]
+        for (_, job) in raiseJobs {
+            job.cancel()
+        }
+        raiseJobs = [:]
         thread?.runInLoopAsync(job: RunLoopJob(.nonCancellable)) { job in CFRunLoopStop(CFRunLoopGetCurrent()) }
         thread = nil // Disallow all future job submissions
     }

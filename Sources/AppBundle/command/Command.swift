@@ -10,6 +10,9 @@ protocol Command: AeroAny, Equatable, Sendable {
 
     /// We should reset closedWindowsCache when the command can potentially change the tree
     var shouldResetClosedWindowsCache: Bool { get }
+    /// Whether this invalidates the tiling layout captured when a window entered macOS-native fullscreen.
+    /// Defaults to ``shouldResetClosedWindowsCache``, because a command that restructures the tree does both
+    var shouldResetMacosFullscreenSnapshots: Bool { get }
 }
 
 extension Command {
@@ -24,6 +27,7 @@ extension Command {
 
 extension Command {
     var info: CmdStaticInfo { T.info }
+    var shouldResetMacosFullscreenSnapshots: Bool { shouldResetClosedWindowsCache }
 }
 
 extension Command {

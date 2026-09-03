@@ -25,10 +25,13 @@ func initTerminationHandler() {
     // A quit asked for over Apple events -- which is how `brew upgrade` and release.sh stop the app -- goes
     // straight to NSApplication.terminate and reaches neither. Saving the layout is hung off the notification
     // instead, which every route to termination posts
+    // queue: nil, deliberately. A non-nil queue enqueues the block as an operation, and termination gives the main
+    // run loop no further turn to drain it -- so the layout would go unsaved on the Apple-event quit this exists
+    // for. nil delivers synchronously on the posting thread, which is the main thread here
     NotificationCenter.default.addObserver(
         forName: NSApplication.willTerminateNotification,
         object: nil,
-        queue: .main,
+        queue: nil,
     ) { _ in MainActor.assumeIsolated { saveLayoutForRestart() } }
 }
 

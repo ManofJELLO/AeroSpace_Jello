@@ -89,13 +89,15 @@ func restoreSavedLayout() async throws -> Bool {
             skipUnrestorableWindows: true,
         )
         prevRoot.unbindFromParent()
+        // Measured before the orphan pass, which re-tiles windows the snapshot never mentioned. Counting those
+        // would report a restore for an empty snapshot, and the startup heuristic would be skipped for nothing
+        restoredAnything = restoredAnything
+            || !workspace.rootTilingContainer.allLeafWindowsRecursive.isEmpty
+            || !savedWorkspace.floatingWindowIds.isEmpty
         try await tileWindowsTheSnapshotDidNotClaim(potentialOrphans, on: workspace)
         for windowId in savedWorkspace.floatingWindowIds {
             MacWindow.get(byId: windowId)?.bindAsFloatingWindow(to: workspace)
         }
-        restoredAnything = restoredAnything
-            || !workspace.rootTilingContainer.allLeafWindowsRecursive.isEmpty
-            || !savedWorkspace.floatingWindowIds.isEmpty
     }
     return restoredAnything
 }

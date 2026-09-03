@@ -2,6 +2,9 @@ import Common
 
 indirect enum Shell<T> {
     case empty
+
+    /// Whether this runs nothing at all. Used to tell a configured callback from an absent one
+    var isEmpty: Bool { if case .empty = self { true } else { false } }
     case cmd(T)
 
     // Listed in precedence order
@@ -101,7 +104,7 @@ extension Shell where T == any Command {
             case .cmd(let command):
                 // Before, not after: `eval 'macos-native-fullscreen'` would otherwise have EvalCommand's own
                 // shouldResetClosedWindowsCache destroy the snapshot the inner command just took.
-                if command.shouldResetClosedWindowsCache { resetMacosFullscreenLayoutSnapshots() }
+                if command.shouldResetMacosFullscreenSnapshots { resetMacosFullscreenLayoutSnapshots() }
                 let exitCode = Int32ExitCode(rawValue: await command.run(env, io).rawValue)
                 if command.shouldResetClosedWindowsCache { resetClosedWindowsCache() }
                 await refreshModel_nonCancellable()
