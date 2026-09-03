@@ -37,10 +37,17 @@ import AppKit
 /// A mouse move deliberately does *not* cancel the attempt already in flight. Cancelling meant an attempt only ever
 /// ran to completion once the pointer came to a stop, because the next move always arrived first, so focus waited for
 /// the pointer to stop instead of tracking where it was
+@MainActor private var focusFollowsGeneration = 0
+
 @MainActor private func startFocusFollowsMouseWorker() {
     if focusFollowsTask != nil { return }
+    focusFollowsGeneration += 1
+    let generation = focusFollowsGeneration
     focusFollowsTask = Task.startUnstructured { @MainActor in
-        defer { focusFollowsTask = nil }
+        // Guarded, because a worker cancelled by a config reload finishes *after* the reload has already started a
+        // replacement. Clearing unconditionally would drop the live worker's reference and let a second one start
+        // alongside it, the two of them racing over the pending location
+        defer { if focusFollowsGeneration == generation { focusFollowsTask = nil } }
         while let location = pendingFocusFollowsLocation {
             pendingFocusFollowsLocation = nil
             guard let remainingDwell = try await focusWindow(under: location) else { continue }

@@ -768,6 +768,22 @@ final class MasterMouseDropTest: XCTestCase {
                      .h_master([.window(4), .window(1), .window(2), .window(3)]))
     }
 
+    func testAWindowAppearingMidDragDoesNotBringDownThePreview() async throws {
+        config.liveDragPreview = true
+        let (workspace, windows) = try await stackWorkspace()
+
+        beginTilingDrag(windows[3])
+        previewTilingDrag(windows[3], cursor: CGPoint(x: 500, y: 100))
+        // Opened while the drag is in flight, so the snapshot has never heard of it. Rebuilding the tree around it
+        // leaves the workspace holding two tiling containers for a moment, and asking for *the* root then is fatal
+        TestWindow.new(id: 99, parent: workspace.rootTilingContainer)
+
+        previewTilingDrag(windows[3], cursor: CGPoint(x: 1500, y: 600))
+
+        let ids = workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.windowId).toSet()
+        XCTAssertTrue(ids.contains(99), "the window that appeared mid-drag was dropped")
+    }
+
     func testLivePreviewIsProvisional() async throws {
         config.liveDragPreview = true
         let (workspace, windows) = try await stackWorkspace()
@@ -825,6 +841,41 @@ private func root(_ workspaceName: String) -> TilingContainer {
 }
 
 /// A workspace whose tiling root is a `master` container holding `windowCount` windows with ids `1...windowCount`
+@MainActor
+final class MasterOrientationOwnershipTest: XCTestCase {
+    override func setUp() async throws { setUpWorkspacesForTests() }
+
+    func testReorientingANestedContainerLeavesTheMasterAreaWhereItIs() {
+        config.enableNormalizationOppositeOrientationForNestedContainers = true
+        let (workspace, _) = masterWorkspace(focus.workspace.name, windowCount: 2)
+        let root = workspace.rootTilingContainer
+        let nested = TilingContainer(parent: root, adaptiveWeight: 1, .v, .tiles, index: INDEX_BIND_LAST)
+        TestWindow.new(id: 3, parent: nested)
+
+        nested.changeOrientation(.h)
+
+        // The walk up from the nested container must stop at the master: its orientation is which edge the master
+        // area sits on, so flipping it would send the master area from the left of the screen to the top
+        assertEquals(root.orientation, .h)
+        assertEquals(root.masterOrientation, .left)
+    }
+
+    func testNormalizationLeavesAContainerNestedInAMasterAreaAlone() {
+        config.enableNormalizationOppositeOrientationForNestedContainers = true
+        let (workspace, _) = masterWorkspace(focus.workspace.name, windowCount: 2)
+        let root = workspace.rootTilingContainer
+        // join-with builds the nested container perpendicular to the axis the master stacks its children along
+        let nested = TilingContainer(parent: root, adaptiveWeight: 1, root.weightOrientation.opposite, .tiles, index: INDEX_BIND_LAST)
+        TestWindow.new(id: 3, parent: nested)
+
+        workspace.normalizeContainers()
+
+        // Comparing the child against the parent's *orientation* rather than the axis it orders children along
+        // would flip this back onto the stacking axis, and the join would have no visible effect at all
+        assertEquals(nested.orientation, root.weightOrientation.opposite)
+    }
+}
+
 @MainActor
 final class MasterMinimumSizeTest: XCTestCase {
     override func setUp() async throws { setUpWorkspacesForTests() }

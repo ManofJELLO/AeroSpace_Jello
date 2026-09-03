@@ -17,7 +17,7 @@ func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableR
             // The button is already up. If it only just came up after travelling, this is the tail of a drag whose
             // notifications lost their race with the release -- which is what a very quick flick looks like. Apply
             // it where the button actually came up, rather than throwing the drag away
-            if window.parent is TilingContainer, let cursor = consumeLateDrag() {
+            if window.parent is TilingContainer, let cursor = consumeLateDrag(for: window.windowId) {
                 try await runLightSession(.ax(notif), token) {
                     moveTilingWindow(window, cursor: cursor)
                     // moveTilingWindow marks the window as mouse-manipulated, and the layout at the end of this
@@ -186,11 +186,14 @@ private final class TilingDragPreview {
             index: INDEX_BIND_LAST,
             skipUnrestorableWindows: true,
         )
-        // Windows that appeared mid-drag aren't in the snapshot. Tile them rather than drop them
-        for orphan in prevRoot.allLeafWindowsRecursive {
+        // Windows that appeared mid-drag aren't in the snapshot. Tile them rather than drop them -- but only once
+        // prevRoot is detached: until then the workspace holds two tiling containers, and asking it for *the* root
+        // is fatal
+        let orphans = prevRoot.allLeafWindowsRecursive
+        prevRoot.unbindFromParent()
+        for orphan in orphans {
             orphan.bind(to: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
         }
-        prevRoot.unbindFromParent()
         // A rebuilt tree's MRU stacks collapse to document order, so replay the captured order oldest-first
         for windowId in mruWindowIds.reversed() where windowId != dragged.windowId {
             MacWindow.get(byId: windowId)?.markAsMostRecentChild()

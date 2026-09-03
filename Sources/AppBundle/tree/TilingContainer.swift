@@ -61,12 +61,14 @@ extension TilingContainer {
         }
         if config.enableNormalizationOppositeOrientationForNestedContainers {
             var orientation = targetOrientation
-            parentsWithSelf
-                .filterIsInstance(of: TilingContainer.self)
-                .forEach {
-                    $0._orientation = orientation
-                    orientation = orientation.opposite
-                }
+            for container in parentsWithSelf.filterIsInstance(of: TilingContainer.self) {
+                // A master container's orientation is half of its MasterOrientation -- which edge the master area
+                // sits on. Rewriting it here would send the master area across the screen rather than reorient a
+                // nested container, so the walk stops at one. 'master set-orientation' owns that axis
+                if container.layout == .master { break }
+                container._orientation = orientation
+                orientation = orientation.opposite
+            }
         } else {
             _orientation = targetOrientation
         }
@@ -78,10 +80,15 @@ extension TilingContainer {
         _orientation = targetOrientation
     }
 
+    @MainActor
     func normalizeOppositeOrientationForNestedContainers() {
         // 'master' containers derive their orientation from their MasterOrientation. Flipping it here would silently
-        // undo what the user asked for, so the normalization skips them (but still descends into their children)
-        if layout != .master && orientation == (parent as? TilingContainer)?.orientation {
+        // undo what the user asked for, so the normalization skips them (but still descends into their children).
+        //
+        // The parent is compared on weightOrientation rather than orientation, because that is the axis a parent
+        // actually orders its children along. They differ for a master parent, and comparing the wrong one flips a
+        // freshly joined container back onto the stacking axis, making 'join-with' inside a master area do nothing
+        if layout != .master && orientation == (parent as? TilingContainer)?.weightOrientation {
             _orientation = orientation.opposite
         }
         for child in children {

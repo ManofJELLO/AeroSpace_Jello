@@ -3,6 +3,8 @@ import Common
 
 @MainActor
 private var activeRefreshTask: Task<(), any Error>? = nil
+@MainActor
+private var activeRefreshTaskGeneration = 0
 
 @MainActor
 func scheduleCancellableCompleteRefreshSession(
@@ -10,7 +12,14 @@ func scheduleCancellableCompleteRefreshSession(
     optimisticallyPreLayoutWorkspaces: Bool = false,
 ) {
     activeRefreshTask?.cancel()
+    activeRefreshTaskGeneration += 1
+    let generation = activeRefreshTaskGeneration
     activeRefreshTask = Task.startUnstructured { @MainActor in
+        // Cleared on the way out, so that a non-nil activeRefreshTask means a refresh is still owed rather than
+        // that one ran at some point. Without this every light session sees a stale finished task, believes it
+        // cancelled pending work, and schedules a complete refresh -- on every pointer move. The generation check
+        // stops a task that is finishing from dropping a newer one's reference
+        defer { if activeRefreshTaskGeneration == generation { activeRefreshTask = nil } }
         try checkCancellation()
         await runHeavyCompleteRefreshSession(
             event,
