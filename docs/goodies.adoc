@@ -238,6 +238,20 @@ link:config-examples/i3-like-config-example.toml[Download i3-like-config.toml]
 include::config-examples/i3-like-config-example.toml[]
 ----
 
+[#jello-config]
+== Master layout config
+
+A working personal config built around this fork's additions: the master layout as
+the default root layout, `focus-follows-mouse` standing in for AutoRaise, and
+`preserve-layout-on-macos-native-fullscreen`.
+
+link:config-examples/jello-config-example.toml[Download jello-config.toml]
+
+[source,toml,subs="macros+,specialchars+"]
+----
+include::config-examples/jello-config-example.toml[]
+----
+
 [#spacelist]
 == Spacelist
 

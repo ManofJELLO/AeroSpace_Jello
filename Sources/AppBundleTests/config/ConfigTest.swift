@@ -14,6 +14,13 @@ final class ConfigTest: XCTestCase {
         assertEquals(result.config.enableNormalizationOppositeOrientationForNestedContainers, false)
     }
 
+    func testParseJelloConfig() {
+        let toml = try! String(contentsOf: projectRoot.appending(component: "docs/config-examples/jello-config-example.toml"), encoding: .utf8)
+        let result = parseConfig(toml)
+        assertEquals(result.errors, [])
+        assertEquals(result.warnings, [])
+    }
+
     func testEmptyConfig() {
         let result = parseConfig("")
         assertEquals(result.errors, [])
