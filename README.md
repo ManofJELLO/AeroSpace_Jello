@@ -33,6 +33,18 @@ brew install --cask ManofJELLO/tap/aerospace-jello
 The fork is built by [`release.sh`](./release.sh), which skips man page and shell completion generation, so those
 aren't included.
 
+The bundled [`default-config.toml`](./docs/config-examples/default-config.toml), which is what runs when there is no
+`~/.aerospace.toml`, is arranged around these additions instead of around upstream's defaults. Workspaces start in the
+`master` layout, `focus-follows-mouse` is on with `raise = false` and `control` to suspend it, `alt-f` and `alt-shift-f`
+are AeroSpace fullscreen and macOS native fullscreen, and the master commands are bound to `alt-backslash`,
+`alt-period`, `alt-shift-enter`, and `alt-shift-period`/`alt-shift-comma`/`alt-shift-slash`. Each one is a single line
+to change back, and the comment above it says what upstream does instead.
+
+The fallbacks the config parser applies to keys your own config leaves out are untouched, so an existing
+`~/.aerospace.toml` behaves exactly as it did.
+[`jello-config-example.toml`](./docs/config-examples/jello-config-example.toml) is a working personal config in the
+same spirit, if you would rather start from one than from the annotated reference.
+
 ### Master layout
 
 A dynamic master/stack layout modelled after
@@ -137,7 +149,8 @@ focus-follows-mouse.disable-key = 'control'  # hold to suspend. none|control|opt
 ```
 
 These map onto AutoRaise's `focusDelay`, `delay` (where `0` means "focus but never raise"), and `disableKey`.
-Defaults are unchanged, so an existing config behaves exactly as before.
+The parser's fallbacks are unchanged, so an existing config that never mentions these keys behaves exactly as before.
+The config this fork *ships* does mention them, and turns focus-follows-mouse on.
 
 `delay-ms` measures how long the pointer has been **inside one window's region**, not how long it has been holding
 still. Dwell time, not stopped time. Waiting for the mouse to stop reads as lag -- you sit there wondering what the

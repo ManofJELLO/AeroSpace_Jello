@@ -46,7 +46,9 @@ floating-windows-on-top = true
 restore-layout-on-restart = true
 
 # Possible values: tiles|accordion|master
-default-root-container-layout = 'tiles'
+# This fork ships 'master' as the default. Set it to 'tiles' for the plain dynamic
+# tiling layout that upstream AeroSpace starts with
+default-root-container-layout = 'master'
 
 # Possible values: horizontal|vertical|auto
 # 'auto' means: wide monitor (anything wider than high) gets horizontal orientation,
@@ -97,8 +99,9 @@ preserve-layout-on-macos-native-fullscreen = true
 # even when they are invisible.
 # This config option is only available since 'config-version = 2'
 # Fallback value (if you omit the key): persistent-workspaces = []
+# F is missing because alt-f is fullscreen here, so nothing below reaches a workspace F
 persistent-workspaces = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B",
-                         "C", "D", "E", "F", "G", "I", "M", "N", "O", "P", "Q",
+                         "C", "D", "E", "G", "I", "M", "N", "O", "P", "Q",
                          "R", "S", "T", "U", "V", "W", "X", "Y", "Z"]
 
 # A callback that runs every time binding mode changes
@@ -113,10 +116,12 @@ on-mode-changed = []
 # 'raise' also pulls the window in front of its app's other windows. Set false to move keyboard focus only
 # Possible values for 'disable-key': none|control|option|command|shift
 #   Hold it to suspend focus-follows-mouse, e.g. while reaching across a window to click something
-focus-follows-mouse.enabled = false
+# This fork ships it on, with 'raise' off so the pointer moves keyboard focus without
+# pulling windows to the front. Set 'enabled' to false to go back to click-to-focus
+focus-follows-mouse.enabled = true
 focus-follows-mouse.delay-ms = 0
-focus-follows-mouse.raise = true
-focus-follows-mouse.disable-key = 'none'
+focus-follows-mouse.raise = false
+focus-follows-mouse.disable-key = 'control'
 
 # Possible values: (qwerty|dvorak|colemak)
 # See https://nikitabobko.github.io/AeroSpace/guide#key-mapping
@@ -170,15 +175,27 @@ gaps.outer.right =      0
     alt-slash = 'layout tiles horizontal vertical'
     alt-comma = 'layout accordion horizontal vertical'
 
-    # Hyprland-style master layout. See: https://nikitabobko.github.io/AeroSpace/guide#master-layout
-    # Uncomment to switch the workspace into the master layout and drive it from the keyboard
+    # Hyprland-style master layout, which this fork uses as the default root layout.
+    # See: https://nikitabobko.github.io/AeroSpace/guide#master-layout
     # See: https://nikitabobko.github.io/AeroSpace/commands#master
-    # alt-m = 'layout tiles master'
-    # alt-shift-enter = 'master swap-with-master'
-    # alt-shift-m = 'master focus-master'
-    # alt-shift-period = 'master set-count +1'
-    # alt-shift-comma = 'master set-count -1'
-    # alt-shift-slash = 'master set-orientation next'
+    # Toggle a workspace between master and plain tiles
+    alt-backslash = 'layout master tiles'
+    # Promote the focused window into the master area, and jump back to the master window
+    alt-shift-enter = 'master swap-with-master'
+    alt-period = 'master focus-master'
+    # Grow and shrink the master area: how many windows it holds, and which side it sits on
+    alt-shift-period = 'master set-count +1'
+    alt-shift-comma = 'master set-count -1'
+    alt-shift-slash = 'master set-orientation next'
+
+    # Fullscreen. 'fullscreen' is AeroSpace's own, which keeps the window in the tiling tree.
+    # 'macos-native-fullscreen' is the green button, which moves it to its own macOS Space --
+    # this fork puts the workspace back the way it was when the window comes out of it.
+    # See: https://nikitabobko.github.io/AeroSpace/guide#macos-native-fullscreen
+    # F is spent on fullscreen here. Upstream spends it on workspace F, which you can have
+    # back by moving these two bindings elsewhere and restoring the F workspace bindings below
+    alt-f = 'fullscreen'
+    alt-shift-f = 'macos-native-fullscreen'
 
     # See: https://nikitabobko.github.io/AeroSpace/commands#focus
     alt-h = 'focus left'
@@ -211,7 +228,6 @@ gaps.outer.right =      0
     alt-c = 'workspace C'
     alt-d = 'workspace D'
     alt-e = 'workspace E'
-    alt-f = 'workspace F'
     alt-g = 'workspace G'
     alt-i = 'workspace I'
     alt-m = 'workspace M'
@@ -244,7 +260,6 @@ gaps.outer.right =      0
     alt-shift-c = 'move-node-to-workspace C'
     alt-shift-d = 'move-node-to-workspace D'
     alt-shift-e = 'move-node-to-workspace E'
-    alt-shift-f = 'move-node-to-workspace F'
     alt-shift-g = 'move-node-to-workspace G'
     alt-shift-i = 'move-node-to-workspace I'
     alt-shift-m = 'move-node-to-workspace M'
