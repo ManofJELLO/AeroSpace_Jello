@@ -125,7 +125,10 @@ step "Generating version metadata"
 ./generate.sh --ignore-xcodeproj --build-version "$build_version" --generate-git-hash
 
 step "Building universal CLI"
-swift build -c release --arch arm64 --arch x86_64 --product aerospace
+swift_build_cli=(build -c release --arch arm64 --arch x86_64 --product aerospace)
+swift "${swift_build_cli[@]}"
+# Ask swift where the binary landed instead of guessing: the path moves between toolchains
+cli_bin_path="$(swift "${swift_build_cli[@]}" --show-bin-path)"
 
 ########################
 ### Codesign identity ##
@@ -170,7 +173,7 @@ rm -rf .release && mkdir -p .release
 
 step "Packaging $zip_name"
 app_src="xcode/.xcode-build/Build/Products/Release/AeroSpace.app"
-cli_src=".build/apple/Products/Release/aerospace"
+cli_src="$cli_bin_path/aerospace"
 test -d "$app_src" || die "missing $app_src"
 test -f "$cli_src" || die "missing $cli_src"
 
