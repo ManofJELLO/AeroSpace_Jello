@@ -1,5 +1,5 @@
 {
-  "originHash" : "6466a3de6b03a7f9499cc6ad528be037cd42ee688a16c00bd96a3fa208099b1e",
+  "originHash" : "621188f45f98b11456f5317867b074ff8eab8d99a57e402b96caedab1e40d0db",
   "pins" : [
     {
       "identity" : "hotkey",
@@ -29,12 +29,21 @@
       }
     },
     {
+      "identity" : "swift-syntax",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-syntax.git",
+      "state" : {
+        "revision" : "050f1a346fbbac0ca2cfb15a95274f7bd1cf0ccf",
+        "version" : "604.0.0"
+      }
+    },
+    {
       "identity" : "tomldecoder",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/dduan/TOMLDecoder",
       "state" : {
-        "revision" : "fa1103a62b1c08cc08eabc58dda8b55887ff1622",
-        "version" : "0.4.4"
+        "revision" : "a2bbd2796fe3064e107de18cb56031052c4fa899",
+        "version" : "0.4.5"
       }
     }
   ],

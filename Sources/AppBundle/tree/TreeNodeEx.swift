@@ -16,9 +16,27 @@ extension TreeNode {
         return result
     }
 
-    var ownIndex: Int? {
+    var allInhabitedLeafWindowsRecursive: [Window] {
+        allLeafWindowsRecursive.filter { $0.lifeStatus.isInhabited }
+    }
+
+    func ownIndex(in scope: HabitationScope) -> Int? {
         guard let parent else { return nil }
-        return parent.children.firstIndex(of: self).orDie()
+        return switch scope {
+            case .all: parent.children.firstIndex(of: self)
+            case .inhabitedOnly: parent.inhabitedChildren.firstIndex(of: self)
+        }
+    }
+
+    func nearestAliveTilingParent() -> (parent: TilingContainer, index: Int)? {
+        var node: TreeNode = self
+        while true {
+            guard let parent = node.parent as? TilingContainer else { return nil }
+            switch parent.lifeStatus {
+                case .alive: return node.ownIndex(in: .all).map { (parent, $0) }
+                case .mustBeFlattened, .deadOrInvisible: node = parent
+            }
+        }
     }
 
     var parents: [NonLeafTreeNodeObject] { parent.flatMap { [$0] + $0.parents } ?? [] }
@@ -29,19 +47,19 @@ extension TreeNode {
         self as? Workspace ?? parent?.nodeWorkspace
     }
 
-    /// Also see: workspace
-    @MainActor
-    var visualWorkspace: Workspace? { nodeWorkspace ?? nodeMonitor?.activeWorkspace }
+    /// Also see: nodeWorkspace
+    @MainActor var visualWorkspace: Workspace? { nodeWorkspace ?? nodeMonitorInfo?.visibleWorkspace }
 
-    @MainActor
-    var nodeMonitor: MonitorInfo? {
+    @MainActor var nodeMonitorInfo: MonitorInfo? {
         switch self.nodeCases {
-            case .workspace(let ws): ws.workspaceMonitor
+            case .monitor(let it): it.info
             case .window,
+                 .workspace,
+                 .workspacesContainer,
                  .tilingContainer,
                  .macosFullscreenWindowsContainer,
                  .macosHiddenAppsWindowsContainer,
-                 .floatingWindowsContainer: parent?.nodeMonitor
+                 .floatingWindowsContainer: parent?.nodeMonitorInfo
             case .macosMinimizedWindowsContainer, .macosPopupWindowsContainer: nil
         }
     }
@@ -78,4 +96,38 @@ extension TreeNode {
         get { getWeight(.v) }
         set { setWeight(.v, newValue) }
     }
+}
+
+extension TilingContainer {
+    func inhabitedSiblingIndex(of ownIndex: Int, in direction: CardinalDirection) -> Int? {
+        let candidates = direction.isPositive
+            ? stride(from: ownIndex + 1, to: children.count, by: 1)
+            : stride(from: ownIndex - 1, to: -1, by: -1)
+        return candidates.first(where: { children[$0].tilingTreeNodeCasesOrDie().isInhabited })
+    }
+}
+
+extension TilingTreeNodeCases {
+    func resolvedThroughMustBeFlattenedRecursive() -> TilingTreeNodeCases {
+        switch self {
+            case .window:
+                self
+            case .tilingContainer(let container):
+                switch container.lifeStatus {
+                    case .alive:
+                        self
+                    case .mustBeFlattened:
+                        container.mostRecentInhabitedChild.orDie("Inhabited containers must have at least one inhabited child")
+                            .tilingTreeNodeCasesOrDie()
+                            .resolvedThroughMustBeFlattenedRecursive()
+                    case .deadOrInvisible:
+                        die("Tombstone containers are skipped by the callers")
+                }
+        }
+    }
+}
+
+enum HabitationScope {
+    case all
+    case inhabitedOnly
 }

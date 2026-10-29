@@ -16,13 +16,18 @@ struct BalanceSizesCommand: Command {
     }
 }
 
-@MainActor
-private func balance(_ parent: TilingContainer) {
-    for child in parent.children {
+@MainActor private func balance(_ parent: TilingContainer) {
+    let inhabitedChildren = parent.inhabitedChildren
+    let equalWeight: CGFloat? = switch parent.layout {
+        case .tiles: CGFloat(inhabitedChildren.sumOfDouble { $0.getWeight(parent.orientation) }).div(inhabitedChildren.count)
+        // 'master' weights are relative shares of a column, so even shares are simply 1
+        case .accordion, .master: nil
+    }
+    for child in inhabitedChildren {
         switch parent.layout {
             // For 'master' this evens out the windows within the master area and within the stack. The split between
             // the two areas is governed by 'master.fraction', not by weights, so it is left untouched
-            case .tiles, .master: child.setWeight(parent.weightOrientation, 1)
+            case .tiles, .master: child.setWeight(parent.weightOrientation, equalWeight ?? 1)
             case .accordion: break // Do nothing
         }
         if let child = child as? TilingContainer {

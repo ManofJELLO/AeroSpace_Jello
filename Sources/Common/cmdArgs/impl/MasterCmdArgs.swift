@@ -9,7 +9,7 @@ public struct MasterCmdArgs: CmdArgs {
             "--workspace": workspaceSubArgParser(),
         ],
         posArgs: [newMandatoryPosArgParser(\.action, parseMasterAction, placeholder: masterActionPlaceholder)],
-        conflictingOptions: [
+        conflictingFlags: [
             ["--window-id", "--workspace"],
         ],
     )

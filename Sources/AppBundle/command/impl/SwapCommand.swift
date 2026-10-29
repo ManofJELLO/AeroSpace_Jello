@@ -19,14 +19,14 @@ struct SwapCommand: Command {
             case .direction(let direction):
                 switch currentWindow.closestTilingNeighbour(inDirection: direction) {
                     case let neighbour?:
-                        targetWindow = neighbour.findLeafWindowRecursive(snappedTo: direction.opposite)
+                        targetWindow = neighbour.findInhabitedLeafWindowRecursive(snappedTo: direction.opposite)
                     case nil where args.wrapAround:
-                        targetWindow = target.workspace.findLeafWindowRecursive(snappedTo: direction.opposite)
+                        targetWindow = target.workspace.findInhabitedLeafWindowRecursive(snappedTo: direction.opposite)
                     case nil:
                         return .fail
                 }
-            case .dfsRelative(let nextPrev):
-                let windows = target.workspace.rootTilingContainer.allLeafWindowsRecursive
+            case .dfsNextPrev(let nextPrev):
+                let windows = target.workspace.rootTilingContainer.allInhabitedLeafWindowsRecursive
                 guard let currentIndex = windows.firstIndex(where: { $0 == target.windowOrNil }) else {
                     return .fail
                 }

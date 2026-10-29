@@ -1,12 +1,13 @@
 import AppKit
+import Common
 
-@MainActor var currentlyManipulatedWithMouseWindowId: UInt32? = nil
+@MainActor var currentlyManipulatedWithMouseWindowId: OpaqueWindowId? = nil
 /// The window being dragged, from the first mouse event until the button is released.
 ///
 /// A tiling drag doesn't touch the tree while it is in flight, it is applied once on mouse-up. That way the window
 /// lands where the cursor actually is when you let go, dragging somewhere and back again is a no-op, and a quick
 /// flick doesn't depend on the last move notification winning a race against the mouse-up
-@MainActor var currentlyDraggedWithMouseWindowId: UInt32? = nil
+@MainActor var currentlyDraggedWithMouseWindowId: OpaqueWindowId? = nil
 var isLeftMouseButtonDown: Bool { NSEvent.pressedMouseButtons == 1 }
 
 @MainActor
@@ -34,7 +35,7 @@ var mouseLocation: CGPoint { NSEvent.mouseLocation.withYAxisFlipped }
 /// A drag is only recognised once the app reports that its window moved, and on a quick flick that report loses its
 /// race with the release: the notification's handler sees the button already up and throws the drag away. Leaving the
 /// release position behind lets the notification land late and still be applied where the button actually came up
-@MainActor private var pendingLateDrag: (cursor: CGPoint, at: ContinuousClock.Instant, releaseId: Int, windowId: UInt32)? = nil
+@MainActor private var pendingLateDrag: (cursor: CGPoint, at: ContinuousClock.Instant, releaseId: Int, windowId: OpaqueWindowId)? = nil
 /// The release whose drag has already been applied, so that a duplicate of it can't set one up again
 @MainActor private var handledReleaseId: Int? = nil
 
@@ -53,7 +54,7 @@ private let lateDragGrace: Duration = .milliseconds(300)
     guard let press = lastMouseDown, press.distance(to: cursor) > dragThreshold else { return }
     // Remember which window was pressed. Without it any window that happens to report a move within the grace --
     // one an app repositioned by itself, say -- would consume the drop and be flung to where the pointer was let go
-    let workspace = press.monitorApproximation.activeWorkspace
+    let workspace = press.monitorApproximation.visibleWorkspace
     guard let pressed = press.findWindowRecursively(in: workspace.rootTilingContainer, virtual: false, fullscreenCoversAll: false) else { return }
     pendingLateDrag = (cursor, .now, releaseId, pressed.windowId)
 }
@@ -66,7 +67,7 @@ private let lateDragGrace: Duration = .milliseconds(300)
 
 /// The position of a release still waiting for its move notification, if there is one. One shot: a second caller,
 /// such as the notification our own re-layout provokes, gets nothing
-@MainActor func consumeLateDrag(for windowId: UInt32) -> CGPoint? {
+@MainActor func consumeLateDrag(for windowId: OpaqueWindowId) -> CGPoint? {
     guard let pending = pendingLateDrag, pending.windowId == windowId else { return nil }
     pendingLateDrag = nil
     return pending.at.advanced(by: lateDragGrace) > .now ? pending.cursor : nil

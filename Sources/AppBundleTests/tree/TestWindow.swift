@@ -1,12 +1,13 @@
 @testable import AppBundle
 import AppKit
+import Common
 
 final class TestWindow: Window, CustomStringConvertible {
     private var _rect: Rect?
     var isMacosFullscreenForTest = false
 
     @MainActor
-    private init(_ id: UInt32, _ parent: NonLeafTreeNodeObject, _ adaptiveWeight: CGFloat, _ rect: Rect?, _ app: TestApp) {
+    private init(_ id: OpaqueWindowId, _ parent: NonLeafTreeNodeObject, _ adaptiveWeight: CGFloat, _ rect: Rect?, _ app: TestApp) {
         _rect = rect
         super.init(id: id, app, lastFloatingSize: nil, parent: parent, adaptiveWeight: adaptiveWeight, index: INDEX_BIND_LAST)
     }
@@ -14,7 +15,7 @@ final class TestWindow: Window, CustomStringConvertible {
     @discardableResult
     @MainActor
     static func new(
-        id: UInt32,
+        id: OpaqueWindowId,
         parent: NonLeafTreeNodeObject,
         adaptiveWeight: CGFloat = 1,
         rect: Rect? = nil,
@@ -60,4 +61,8 @@ final class TestWindow: Window, CustomStringConvertible {
     }
 
     override func isMacosFullscreen(_ cm: CancellationMode) async throws -> Bool { isMacosFullscreenForTest }
+}
+
+extension OpaqueWindowId: ExpressibleByIntegerLiteral {
+    public init(integerLiteral value: UInt64) { self.init(value) }
 }

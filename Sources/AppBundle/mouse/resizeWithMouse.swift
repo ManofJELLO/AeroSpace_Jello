@@ -6,10 +6,15 @@ private var resizeWithMouseTask: Task<(), any Error>? = nil
 
 func resizedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableRawPointer?) {
     let notif = notif as String
-    let windowId = ax.containingWindowId()
+    let nativeWindowId = ax.containingNativeWindowId()
+    let pid = ax.pid
     Task.startUnstructured { @MainActor in
         guard let token: RunSessionGuard = .isServerEnabled else { return }
-        guard let windowId, let window = Window.get(byId: windowId), try await isManipulatedWithMouse(window) else {
+        guard let nativeWindowId,
+              let pid,
+              let window = Window.get(byNativeId: nativeWindowId, pid: pid),
+              try await isManipulatedWithMouse(window)
+        else {
             scheduleCancellableCompleteRefreshSession(.ax(notif))
             return
         }
@@ -46,7 +51,7 @@ private func resizeWithMouse(_ window: Window) async throws { // todo cover with
     resetClosedWindowsCache()
     resetMacosFullscreenLayoutSnapshots()
     switch window.windowParentCases {
-        case .unbound: return
+        case nil: return
         case .floatingWindowsContainer, .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
              .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer:
             return // Nothing to do for floating, or unconventional windows
@@ -82,10 +87,12 @@ private func resizeTilesWithMouse(
     direction: CardinalDirection,
     diff: CGFloat,
 ) {
-    guard let ownIndex = node.ownIndex else { return }
+    guard let ownIndex = node.ownIndex(in: .all) else { return }
     let startIndex = direction.isPositive ? ownIndex + 1 : 0
-    let pastTheEndIndex = direction.isPositive ? parent.children.count : ownIndex
-    guard let siblingDiff = diff.div(pastTheEndIndex - startIndex) else { return }
+    let untilIndex = direction.isPositive ? parent.children.count : ownIndex
+    let inhabitedSiblings = (parent.children.slice(startIndex ..< untilIndex) ?? [])
+        .filter { $0.tilingTreeNodeCasesOrDie().isInhabited }
+    guard let siblingDiff = diff.div(inhabitedSiblings.count) else { return }
     let orientation = parent.orientation
 
     window.parentsWithSelf.lazy
@@ -95,7 +102,7 @@ private func resizeTilesWithMouse(
             return parent?.orientation == orientation && parent?.layout == .tiles
         }
         .forEach { $0.setWeight(orientation, $0.getWeightBeforeResize(orientation) + diff) }
-    for sibling in parent.children[startIndex ..< pastTheEndIndex] {
+    for sibling in inhabitedSiblings {
         sibling.setWeight(orientation, sibling.getWeightBeforeResize(orientation) - siblingDiff)
     }
 }

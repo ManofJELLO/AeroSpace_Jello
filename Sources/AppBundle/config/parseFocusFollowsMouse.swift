@@ -17,5 +17,5 @@ private func parseDisableKey(_ raw: OrderedJson, _ backtrace: ConfigBacktrace) -
 }
 
 func parseFocusFollowsMouse(_ rawConfig: OrderedJson, _ backtrace: ConfigBacktrace, _ c: inout ConfigParserContext) -> FocusFollowsMouse {
-    parseTable(rawConfig, FocusFollowsMouse(), focusFollowsMouseParserTable, backtrace, &c)
+    parseNonEmptyTable(rawConfig, FocusFollowsMouse(), focusFollowsMouseParserTable, backtrace, &c)
 }

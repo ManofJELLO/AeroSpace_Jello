@@ -12,6 +12,13 @@ struct ResizeCommand: Command {
         // full container
         let candidates = target.windowOrNil?.parentsWithSelf
             .filter {
+                guard let parent = $0.parent as? TilingContainer else { return false }
+                return switch parent.lifeStatus {
+                    case .alive: true
+                    case .mustBeFlattened, .deadOrInvisible: false
+                }
+            }
+            .filter {
                 switch ($0.parent as? TilingContainer)?.layout {
                     case .tiles, .master: true
                     case .accordion, nil: false
@@ -68,10 +75,11 @@ struct ResizeCommand: Command {
             case .subtract(let unit): -CGFloat(unit)
         }
 
-        guard let childDiff = diff.div(parent.children.count - 1) else { return .fail }
-        parent.children.lazy
-            .filter { $0 != node }
-            .forEach { $0.setWeight(parent.orientation, $0.getWeight(parent.orientation) - childDiff) }
+        let inhabitedSiblings = parent.inhabitedChildren.filter { $0 != node }
+        guard let childDiff = diff.div(inhabitedSiblings.count) else { return .fail }
+        for sibling in inhabitedSiblings {
+            sibling.setWeight(parent.orientation, sibling.getWeight(parent.orientation) - childDiff)
+        }
 
         node.setWeight(orientation, node.getWeight(orientation) + diff)
         return .succ

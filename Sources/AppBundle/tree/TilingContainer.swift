@@ -4,7 +4,15 @@ import Common
 final class TilingContainer: TreeNode, NonLeafTreeNodeObject { // todo consider renaming to GenericContainer
     fileprivate var _orientation: Orientation
     var orientation: Orientation { _orientation }
-    var layout: Layout
+    private var _layout: Layout
+    var layout: Layout {
+        get { _layout }
+        set(value) {
+            if isDebug && lifeStatus != .alive { die("Can't change layout of not alive TilingContainer") }
+            _layout =  value
+        }
+    }
+    var lifeStatus: TilingContainerLifeStatus = .alive // todo tighten its visibility
     /// Only meaningful when ``layout`` is ``Layout/master``. See ``MasterState``
     var master: MasterState
 
@@ -18,7 +26,7 @@ final class TilingContainer: TreeNode, NonLeafTreeNodeObject { // todo consider 
         master: MasterState = MasterState(),
     ) {
         self._orientation = orientation
-        self.layout = layout
+        self._layout = layout
         self.master = master
         super.init(parent: parent, adaptiveWeight: adaptiveWeight, index: index)
     }
@@ -60,14 +68,12 @@ extension TilingContainer {
             return
         }
         if config.enableNormalizationOppositeOrientationForNestedContainers {
-            var orientation = targetOrientation
             for container in parentsWithSelf.filterIsInstance(of: TilingContainer.self) {
                 // A master container's orientation is half of its MasterOrientation -- which edge the master area
                 // sits on. Rewriting it here would send the master area across the screen rather than reorient a
                 // nested container, so the walk stops at one. 'master set-orientation' owns that axis
                 if container.layout == .master { break }
-                container._orientation = orientation
-                orientation = orientation.opposite
+                container._orientation.flip()
             }
         } else {
             _orientation = targetOrientation
@@ -80,19 +86,22 @@ extension TilingContainer {
         _orientation = targetOrientation
     }
 
+    /// `parentOrientation` is the axis the parent orders its children along: its ``weightOrientation``. That differs
+    /// from its orientation for a master parent, and comparing the wrong one flips a freshly joined container back
+    /// onto the stacking axis, making 'join-with' inside a master area do nothing
     @MainActor
-    func normalizeOppositeOrientationForNestedContainers() {
-        // 'master' containers derive their orientation from their MasterOrientation. Flipping it here would silently
-        // undo what the user asked for, so the normalization skips them (but still descends into their children).
-        //
-        // The parent is compared on weightOrientation rather than orientation, because that is the axis a parent
-        // actually orders its children along. They differ for a master parent, and comparing the wrong one flips a
-        // freshly joined container back onto the stacking axis, making 'join-with' inside a master area do nothing
-        if layout != .master && orientation == (parent as? TilingContainer)?.weightOrientation {
-            _orientation = orientation.opposite
+    func normalizeOppositeOrientationForNestedContainersRecursive(parentOrientation: Orientation?) {
+        switch lifeStatus {
+            case .deadOrInvisible: return
+            // 'master' containers derive their orientation from their MasterOrientation. Flipping it here would
+            // silently undo what the user asked for, so the normalization skips them (but still descends into their
+            // children)
+            case _ where layout == .master: break
+            case .alive: _orientation = parentOrientation?.opposite ?? orientation
+            case .mustBeFlattened: _orientation = parentOrientation ?? orientation
         }
         for child in children {
-            (child as? TilingContainer)?.normalizeOppositeOrientationForNestedContainers()
+            (child as? TilingContainer)?.normalizeOppositeOrientationForNestedContainersRecursive(parentOrientation: weightOrientation)
         }
     }
 }
@@ -143,10 +152,18 @@ extension TilingContainer {
     /// ``MasterState/count`` clamped to the number of children the container actually holds.
     ///
     /// When it equals `children.count` there is no stack, and every child shares the whole container.
-    var effectiveMasterCount: Int { master.count.coerceIn(0 ... children.count) }
+    /// Tombstones (windows on other macOS Spaces, background native tabs) don't take a slot, so the master math is
+    /// done over ``inhabitedChildren`` only
+    var effectiveMasterCount: Int { master.count.coerceIn(0 ... inhabitedChildren.count) }
 
-    var masterChildren: ArrSlice<TreeNode> { children.slice(0 ..< effectiveMasterCount).orDie() }
-    var stackChildren: ArrSlice<TreeNode> { children.slice(effectiveMasterCount ..< children.count).orDie() }
+    var masterChildren: ArrSlice<TreeNode> {
+        let inhabited = inhabitedChildren
+        return inhabited.slice(0 ..< effectiveMasterCount).orDie()
+    }
+    var stackChildren: ArrSlice<TreeNode> {
+        let inhabited = inhabitedChildren
+        return inhabited.slice(effectiveMasterCount ..< inhabited.count).orDie()
+    }
 
     /// The weight ``WEIGHT_AUTO`` resolves to for a child bound at `index`: the average of the children it will end
     /// up sharing space with, so that a new window comes out the same size as its neighbours.
@@ -156,20 +173,22 @@ extension TilingContainer {
     /// column divides the same extent between fewer windows
     @MainActor
     func autoWeight(forChildInsertedAt index: Int) -> CGFloat {
+        let inhabited = inhabitedChildren
         let pool: [TreeNode] = if layout == .master {
-            (index != INDEX_BIND_LAST ? index : children.count) < effectiveMasterCount
+            // `index` counts tombstones, the master/stack split doesn't
+            (index != INDEX_BIND_LAST ? children.prefix(index).count { $0.tilingTreeNodeCasesOrDie().isInhabited } : inhabited.count) < effectiveMasterCount
                 ? masterChildren.toArray()
                 : stackChildren.toArray()
         } else {
-            children
+            inhabited
         }
-        let siblings = pool.isEmpty ? children : pool
+        let siblings = pool.isEmpty ? inhabited : pool
         return CGFloat(siblings.sumOfDouble { $0.getWeight(weightOrientation) }).div(siblings.count) ?? 1
     }
 
     /// `true` if `node` is a direct child of this container and belongs to the master group
     func isMaster(_ node: TreeNode) -> Bool {
-        guard let index = node.ownIndex, node.parent === self else { return false }
+        guard node.parent === self, let index = node.ownIndex(in: .inhabitedOnly) else { return false }
         return index < effectiveMasterCount
     }
 

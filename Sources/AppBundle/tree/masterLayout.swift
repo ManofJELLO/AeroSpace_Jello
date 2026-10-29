@@ -30,7 +30,8 @@ extension TilingContainer {
     var orderedMasterGroups: [MasterGroup] {
         let masters = masterChildren.toArray()
         let stack = stackChildren.toArray()
-        if children.isEmpty { return [] }
+        let inhabited = inhabitedChildren
+        if inhabited.isEmpty { return [] }
         // Checked before the "single populated group" shortcut below: an effective `center` keeps all three columns
         // even when one of them is empty, so the master area stays centred. That is also what Hyprland does once
         // `slave_count_for_center_master` is low enough to let a single stack window through
@@ -42,7 +43,7 @@ extension TilingContainer {
             ]
         }
         if masters.isEmpty || stack.isEmpty {
-            return [MasterGroup(nodes: children, isMasterArea: !masters.isEmpty)]
+            return [MasterGroup(nodes: inhabited, isMasterArea: !masters.isEmpty)]
         }
         let masterGroup = MasterGroup(nodes: masters, isMasterArea: true)
         let stackGroup = MasterGroup(nodes: stack, isMasterArea: false)
@@ -84,21 +85,23 @@ extension TilingContainer {
     /// The most recently focused of `nodes`, falling back to the first one
     @MainActor
     func mruChild(among nodes: [TreeNode]) -> TreeNode? {
-        mruChildren.first(where: { nodes.contains($0) }) ?? nodes.first
+        _mruChildren.first(where: { nodes.contains($0) }) ?? nodes.first
     }
 }
 
 extension TilingContainer {
-    /// Where `master.new-window-position` says a newly detected window should be inserted
+    /// Where `master.new-window-position` says a newly detected window should be inserted. `focusedIndex` is the
+    /// index among ``children`` of the child that holds the most recently focused window
     @MainActor
-    func newWindowIndex(afterFocused mruWindow: Window) -> Int {
+    func newWindowIndex(afterFocusedAt focusedIndex: Int) -> Int {
         switch config.master.newWindowPosition {
             // Index 0 is the first master slot: the new window takes over the master area, and the window that used
             // to be there is pushed to the top of the stack
             case .master: 0
-            case .stackStart: effectiveMasterCount
+            // Indices here count tombstones, so the slot is found through the child that holds it
+            case .stackStart: stackChildren.first?.ownIndex(in: .all) ?? children.count
             case .stackEnd: children.count
-            case .afterFocused: (mruWindow.ownIndex ?? children.count - 1) + 1
+            case .afterFocused: focusedIndex + 1
         }
     }
 }
@@ -118,7 +121,7 @@ extension TreeNode {
                         return neighbour
                     }
                 // Stop searching. We hit the top of the tiling tree, or something that isn't tiled at all
-                case .workspace, nil, .macosMinimizedWindowsContainer, .floatingWindowsContainer,
+                case .workspace, nil, .macosMinimizedWindowsContainer, .floatingWindowsContainer, .monitor, .workspacesContainer,
                      .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer, .macosPopupWindowsContainer:
                     return nil
             }
@@ -135,8 +138,8 @@ extension TilingContainer {
             case .master:
                 return masterNeighbour(of: child, inDirection: direction)
             case .tiles, .accordion:
-                guard orientation == direction.orientation, let index = child.ownIndex else { return nil }
-                return children.getOrNil(atIndex: index + direction.focusOffset)
+                guard orientation == direction.orientation, let index = child.ownIndex(in: .all) else { return nil }
+                return inhabitedSiblingIndex(of: index, in: direction).map { children[$0] }
         }
     }
 }
@@ -155,7 +158,7 @@ extension TreeNode {
                         return (parent, node)
                     }
                 // Stop searching. We hit the top of the tiling tree, or something that isn't tiled at all
-                case .workspace, nil, .macosMinimizedWindowsContainer, .floatingWindowsContainer,
+                case .workspace, nil, .macosMinimizedWindowsContainer, .floatingWindowsContainer, .monitor, .workspacesContainer,
                      .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer, .macosPopupWindowsContainer:
                     return nil
             }

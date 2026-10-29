@@ -19,7 +19,7 @@ struct MoveCommand: Command {
             return .fail
         }
         switch currentWindow.windowParentCases {
-            case .unbound: return .fail
+            case nil: return .fail
             case .tilingContainer(let parent) where parent.layout == .master:
                 // In a master container windows occupy ordered slots rather than a spatial subtree, so a move is a
                 // swap with the neighbouring slot. Along the master/stack axis that promotes or demotes the window
@@ -29,15 +29,16 @@ struct MoveCommand: Command {
                 swapTreeNodes(mruDominant: currentWindow, neighbour)
                 return .succ
             case .tilingContainer(let parent):
-                guard let indexOfCurrent = currentWindow.ownIndex else { return .fail(io.err(bugPrompt())) }
-                let indexOfSiblingTarget = indexOfCurrent + direction.focusOffset
-                if parent.orientation == direction.orientation && parent.children.indices.contains(indexOfSiblingTarget) {
-                    switch parent.children[indexOfSiblingTarget].tilingTreeNodeCasesOrDie() {
+                guard let indexOfCurrent = currentWindow.ownIndex(in: .all) else { return .fail(io.err(bugPrompt())) }
+                if parent.orientation == direction.orientation,
+                   let siblingIndex = parent.inhabitedSiblingIndex(of: indexOfCurrent, in: direction)
+                {
+                    switch parent.children[siblingIndex].tilingTreeNodeCasesOrDie().resolvedThroughMustBeFlattenedRecursive() {
                         case .tilingContainer(let topLevelSiblingTargetContainer):
                             return deepMoveIn(window: currentWindow, into: topLevelSiblingTargetContainer, moveDirection: direction, io)
                         case .window: // "swap windows"
                             let prevBinding = currentWindow.unbindFromParent()
-                            currentWindow.bind(to: parent, adaptiveWeight: prevBinding.adaptiveWeight, index: indexOfSiblingTarget)
+                            currentWindow.bind(to: parent, adaptiveWeight: prevBinding.adaptiveWeight, index: siblingIndex)
                             return .succ
                     }
                 } else {
@@ -71,14 +72,14 @@ struct MoveCommand: Command {
                     return .succ
             }
         case .allMonitorsOuterFrame:
-            guard let (monitors, index) = window.nodeMonitor?.findRelativeMonitor(inDirection: direction) else {
+            guard let (monitors, index) = window.nodeMonitorInfo?.findRelativeMonitor(inDirection: direction) else {
                 return .fail(io.err("Should never happen. Can't find the current monitor"))
             }
 
             if monitors.indices.contains(index) {
                 let moveNodeToMonitorArgs = MoveNodeToMonitorCmdArgs(target: .direction(direction))
-                    .copy(\.windowId, window.windowId)
-                    .copy(\.focusFollowsWindow, focus.windowOrNil == window)
+                    .with(\.windowId, window.windowId)
+                    .with(\.focusFollowsWindow, globalFocus.windowOrNil == window)
 
                 return MoveNodeToMonitorCommand(args: moveNodeToMonitorArgs).run(env, io)
             } else {
@@ -111,27 +112,33 @@ private let moveOutMacosUnconventionalWindow = "moving macOS fullscreen, minimiz
     _ args: MoveCmdArgs,
     _ env: CmdEnv,
 ) -> BinaryExitCode {
-    let innerMostTilingContainer = window.parents.first(where: {
-        return switch $0.parent?.cases {
-            case .tilingContainer(let parent) where parent.layout == .master:
-                parent.masterNeighbour(of: $0, inDirection: direction, crossColumn: .sameRow) != nil
-            case .tilingContainer(let parent): parent.orientation == direction.orientation
+    let proposedSibling = window.parents.first(where: { proposedSibling in
+        return switch proposedSibling.parent?.cases {
+            case .tilingContainer(let proposedParent):
+                switch proposedParent.lifeStatus {
+                    case .alive where proposedParent.layout == .master:
+                        proposedParent.masterNeighbour(of: proposedSibling, inDirection: direction, crossColumn: .sameRow) != nil
+                    case .alive: proposedParent.orientation == direction.orientation
+                    case .mustBeFlattened, .deadOrInvisible: false
+                }
             // Stop searching: we have hit the workspace
             case nil, .workspace: true
             // Impossible: tilingContainer's parent can only be a workspace or tilingContainer
             case .floatingWindowsContainer,
                  .macosMinimizedWindowsContainer,
+                 .monitor,
+                 .workspacesContainer,
                  .macosFullscreenWindowsContainer,
                  .macosHiddenAppsWindowsContainer,
                  .macosPopupWindowsContainer: true
         }
     }) as? TilingContainer
-    guard let innerMostTilingContainer else { return .fail(io.err(bugPrompt())) } // Impossible
-    switch innerMostTilingContainer.tilingContainerParentCases {
+    guard let proposedSibling else { return .fail(io.err(bugPrompt())) } // Impossible
+    switch proposedSibling.tilingContainerParentCases {
         case .unbound: return .fail
         case .tilingContainer(let parent):
             check(parent.layout == .master || parent.orientation == direction.orientation)
-            guard let ownIndex = innerMostTilingContainer.ownIndex else { return .fail(io.err(bugPrompt())) }
+            guard let ownIndex = proposedSibling.ownIndex(in: .all) else { return .fail(io.err(bugPrompt())) }
             window.bind(to: parent, adaptiveWeight: WEIGHT_AUTO, index: ownIndex + direction.insertionOffset)
             return .succ
         case .workspace(let parent):
@@ -163,8 +170,7 @@ private let moveOutMacosUnconventionalWindow = "moving macOS fullscreen, minimiz
         case .tilingContainer(let deepTarget):
             window.bind(to: deepTarget, adaptiveWeight: WEIGHT_AUTO, index: 0)
         case .window(let deepTarget):
-            guard let parent = deepTarget.parent as? TilingContainer else { return .fail(io.err(bugPrompt())) }
-            guard let deepTargetIndex = deepTarget.ownIndex else { return .fail(io.err(bugPrompt())) }
+            guard let (parent, deepTargetIndex) = deepTarget.nearestAliveTilingParent() else { return .fail(io.err(bugPrompt())) }
             window.bind(to: parent, adaptiveWeight: WEIGHT_AUTO, index: deepTargetIndex + 1)
     }
     return .succ
@@ -175,12 +181,17 @@ extension TilingTreeNodeCases {
         switch self {
             case .window:
                 self
-            case .tilingContainer(let container) where container.orientation == orientation:
-                .tilingContainer(container)
             case .tilingContainer(let container):
-                container.mostRecentChild.orDie("Empty containers must be detached during normalization")
-                    .tilingTreeNodeCasesOrDie()
-                    .findDeepMoveInTargetRecursive(orientation)
+                switch container.lifeStatus {
+                    case .alive where container.orientation == orientation:
+                        .tilingContainer(container)
+                    case .alive, .mustBeFlattened:
+                        container.mostRecentInhabitedChild.orDie("Inhabited containers must have at least one inhabited child")
+                            .tilingTreeNodeCasesOrDie()
+                            .findDeepMoveInTargetRecursive(orientation)
+                    case .deadOrInvisible:
+                        die("Tombstone containers are skipped by the callers")
+                }
         }
     }
 }

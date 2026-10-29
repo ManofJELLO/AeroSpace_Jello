@@ -1,4 +1,5 @@
 import AppKit
+import Common
 
 @MainActor private var focusFollowsMouseMonitor: Any? = nil
 @MainActor private var focusFollowsTask: Task<(), any Error>? = nil
@@ -7,7 +8,7 @@ import AppKit
 @MainActor private var pendingFocusFollowsLocation: CGPoint? = nil
 /// The window the pointer is currently over, and when it entered. `delay-ms` is measured against this: how long the
 /// pointer has been inside one window's region, not how long it has been holding still
-@MainActor private var hoveredSince: (windowId: UInt32, since: ContinuousClock.Instant)? = nil
+@MainActor private var hoveredSince: (windowId: OpaqueWindowId, since: ContinuousClock.Instant)? = nil
 
 @MainActor func syncFocusFollowsMouse(_ config: Config) {
     if config.focusFollowsMouse.enabled == (focusFollowsMouseMonitor != nil) {
@@ -69,7 +70,7 @@ import AppKit
 
     // Work out the window from the model before touching the AX API. Hovering tiled windows needs no AX request at
     // all, and that is what lets focus keep up with a pointer that is still moving
-    let workspace = location.monitorApproximation.activeWorkspace
+    let workspace = location.monitorApproximation.visibleWorkspace
 
     // A window macOS put in its own fullscreen space covers the whole screen, but it is no longer in the tiling
     // tree -- the windows it left behind are, laid out underneath it. Resolving the pointer against that tree would
@@ -81,7 +82,7 @@ import AppKit
     }
 
     var window: Window? = nil
-    for child in workspace.floatingWindowsContainer.mruChildren {
+    for child in workspace.floatingWindowsContainer._mruChildren {
         try checkCancellation()
         guard let child = child as? Window else { continue }
         guard let rect = try await child.getAxRect(.cancellable) else { continue }
@@ -95,7 +96,7 @@ import AppKit
     }
     // Checked before the AX round trip below, because while the pointer crosses the window it is already on, this is
     // the answer almost every time
-    guard let window, window != focus.windowOrNil else {
+    guard let window, window != globalFocus.windowOrNil else {
         hoveredSince = nil
         return nil
     }

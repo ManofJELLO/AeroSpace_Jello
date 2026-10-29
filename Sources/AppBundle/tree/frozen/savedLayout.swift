@@ -16,8 +16,12 @@ struct SavedLayout: Codable {
     let windowApps: [String: String]
 }
 
+/// Every window id in here is a native `CGWindowID`. An ``OpaqueWindowId`` only means something to the process that
+/// handed it out, and surviving a restart is the whole point of this file. It is also the format older builds wrote,
+/// so the first launch after an upgrade can still read what the previous build left behind
 struct SavedWorkspace: Codable {
     let name: String
+    /// ``FrozenWindow/id`` holds the native id, widened
     let root: FrozenContainer
     let floatingWindowIds: [UInt32]
 }
@@ -32,15 +36,18 @@ func saveLayoutForRestart() {
     if !config.restoreLayoutOnRestart || serverArgs.isReadOnly { return }
     var windowApps: [String: String] = [:]
     for window in MacWindow.allWindowsMap.values {
-        windowApps[String(window.windowId)] = window.app.identityForRestore
+        guard let nativeId = window.nativeWindowIdForRestore else { continue }
+        windowApps[String(nativeId)] = window.app.identityForRestore
     }
     let saved = SavedLayout(
         bootTime: systemBootTime(),
         workspaces: Workspace.all.map {
             SavedWorkspace(
                 name: $0.name,
-                root: FrozenContainer($0.rootTilingContainer),
-                floatingWindowIds: $0.floatingWindows.map(\.windowId),
+                root: FrozenContainer($0.rootTilingContainer).mapWindowIds { id in
+                    MacWindow.allWindowsMap[id]?.nativeWindowIdForRestore.map { OpaqueWindowId(UInt64($0)) }
+                },
+                floatingWindowIds: $0.floatingWindows.compactMap { ($0 as? MacWindow)?.nativeWindowIdForRestore },
             )
         },
         windowApps: windowApps,
@@ -71,7 +78,7 @@ func restoreSavedLayout() async throws -> Bool {
     // trusted to refer to the window it was written for. Restoring part of it would scatter windows rather than
     // place them
     for (rawId, app) in saved.windowApps {
-        guard let windowId = UInt32(rawId), let window = MacWindow.get(byId: windowId) else { continue }
+        guard let nativeId = UInt32(rawId), let window = MacWindow.get(byNativeIdForRestore: nativeId) else { continue }
         if window.app.identityForRestore != app { return false }
     }
 
@@ -83,7 +90,9 @@ func restoreSavedLayout() async throws -> Bool {
         // Rebuild before detaching the old root, for the same reason restoreMacosFullscreenLayout does: the lookup
         // that finds each window walks down from the workspaces, so the windows have to stay reachable meanwhile
         restoreTreeRecursive(
-            frozenContainer: savedWorkspace.root,
+            frozenContainer: savedWorkspace.root.mapWindowIds { id in
+                UInt32(exactly: id.rawId).flatMap { MacWindow.get(byNativeIdForRestore: $0) }?.windowId
+            },
             parent: workspace,
             index: INDEX_BIND_LAST,
             skipUnrestorableWindows: true,
@@ -95,8 +104,8 @@ func restoreSavedLayout() async throws -> Bool {
             || !workspace.rootTilingContainer.allLeafWindowsRecursive.isEmpty
             || !savedWorkspace.floatingWindowIds.isEmpty
         try await tileWindowsTheSnapshotDidNotClaim(potentialOrphans, on: workspace)
-        for windowId in savedWorkspace.floatingWindowIds {
-            MacWindow.get(byId: windowId)?.bindAsFloatingWindow(to: workspace)
+        for nativeId in savedWorkspace.floatingWindowIds {
+            MacWindow.get(byNativeIdForRestore: nativeId)?.bindAsFloatingWindow(to: workspace)
         }
     }
     return restoredAnything
@@ -118,6 +127,20 @@ func tileWindowsTheSnapshotDidNotClaim(_ candidates: [Window], on workspace: Wor
 private func readSavedLayout() -> SavedLayout? {
     guard let data = try? Data(contentsOf: savedLayoutUrl) else { return nil }
     return try? JSONDecoder().decode(SavedLayout.self, from: data)
+}
+
+extension MacWindow {
+    @MainActor
+    fileprivate var nativeWindowIdForRestore: UInt32? { macApp.nativeWindowId(of: windowId) }
+
+    /// A `CGWindowID` is unique across the whole window server, so there is no need to know the owning app up front
+    @MainActor
+    fileprivate static func get(byNativeIdForRestore nativeId: UInt32) -> MacWindow? {
+        MacApp.allAppsMap.values.lazy
+            .compactMap { $0.opaqueWindowId(of: nativeId) }
+            .first
+            .flatMap { MacWindow.allWindowsMap[$0] }
+    }
 }
 
 extension AbstractApp {

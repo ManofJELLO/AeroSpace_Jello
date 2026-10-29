@@ -13,16 +13,16 @@ struct MacosFullscreenLayoutSnapshot: Sendable {
     /// The workspace's tiling windows at the moment of entering fullscreen, most-recent-first. Replayed in reverse
     /// on the way out (see `restoreMacosFullscreenLayout`) so that every ancestor container's MRU stack ends up in
     /// its original relative order, instead of collapsing to document order the way a freshly-rebuilt tree would.
-    let mruWindowIds: [UInt32]
+    let mruWindowIds: [OpaqueWindowId]
 }
 
-@MainActor private var snapshots: [UInt32: MacosFullscreenLayoutSnapshot] = [:]
+@MainActor private var snapshots: [OpaqueWindowId: MacosFullscreenLayoutSnapshot] = [:]
 
 extension TreeNode {
-    /// Leaf windows in most-recent-first order, obtained by walking `mruChildren` (not `children`) at every level.
+    /// Leaf windows in most-recent-first order, obtained by walking `_mruChildren` (not `children`) at every level.
     var mruOrderedLeafWindowsRecursive: [Window] {
         if let window = self as? Window { return [window] }
-        return mruChildren.flatMap { $0.mruOrderedLeafWindowsRecursive }
+        return _mruChildren.flatMap { $0.mruOrderedLeafWindowsRecursive }
     }
 }
 
@@ -41,7 +41,7 @@ func enterMacosNativeFullscreen(window: Window, workspace: Workspace, adaptiveWe
             mruWindowIds: workspace.rootTilingContainer.mruOrderedLeafWindowsRecursive.map(\.windowId),
         )
     }
-    if case .standard = window.layoutReason, let parent = window.parent {
+    if case .standard = window.layoutReason, let parent = window.windowParentCases {
         window.layoutReason = .macos(prevParentKind: parent.kind)
     }
     window.bind(to: workspace.macOsNativeFullscreenWindowsContainer, adaptiveWeight: adaptiveWeight, index: INDEX_BIND_LAST)
@@ -109,7 +109,7 @@ func restoreMacosFullscreenLayout(window: Window, workspace: Workspace, _ cm: Ca
 }
 
 @MainActor
-func dropMacosFullscreenLayoutSnapshot(windowId: UInt32) {
+func dropMacosFullscreenLayoutSnapshot(windowId: OpaqueWindowId) {
     snapshots.removeValue(forKey: windowId)
 }
 

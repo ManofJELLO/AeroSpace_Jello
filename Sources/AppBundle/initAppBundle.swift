@@ -20,7 +20,12 @@ import Foundation
         startUnixSocketServer()
         GlobalObserver.initObserver()
         Workspace.garbageCollectUnusedWorkspaces() // init workspaces
-        _ = Workspace.all.first?.focusWorkspace()
+        for monitor in Monitor.all {
+            _ = monitor.getWorkspacesContainerOrCreate().children.filterIsInstance(of: Workspace.self)
+                .sorted()
+                .first?
+                .focusWorkspace()
+        }
         await runHeavyCompleteRefreshSession(
             .startup,
             // It's important for the first initialization to be non cancellable
@@ -52,7 +57,7 @@ import Foundation
 
 @MainActor
 func smartLayoutAtStartup() {
-    let workspace = focus.workspace
+    let workspace = globalFocus.workspace
     let root = workspace.rootTilingContainer
     // The heuristic only chooses between tiles and accordion. It has nothing sensible to say about 'master', which
     // is built to hold many windows, and running it anyway would silently undo

@@ -1,4 +1,6 @@
-@MainActor private var lastKnownNativeFocusedWindowId: UInt32? = nil
+import Common
+
+@MainActor private var lastKnownNativeFocusedWindowId: OpaqueWindowId? = nil
 
 /// The data should flow (from nativeFocused to focused) and
 ///                      (from nativeFocused to lastKnownNativeFocusedWindowId)
@@ -15,7 +17,7 @@
         _ = nativeFocused?.focusWindow()
         lastKnownNativeFocusedWindowId = nativeFocused?.windowId
     }
-    nativeFocused?.macAppUnsafe.lastNativeFocusedWindowId = nativeFocused?.windowId
+    nativeFocused?.macAppUnsafe.lastFocusedNativeWindowOpaqueId = nativeFocused?.windowId
 }
 
 /// Records a focus change that AeroSpace made itself.
@@ -25,5 +27,5 @@
 /// AX thread of an app that may be busy
 @MainActor func noteFocusGivenTo(_ window: Window) {
     lastKnownNativeFocusedWindowId = window.windowId
-    window.macAppUnsafe.lastNativeFocusedWindowId = window.windowId
+    window.macAppUnsafe.lastFocusedNativeWindowOpaqueId = window.windowId
 }

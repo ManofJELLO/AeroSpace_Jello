@@ -95,9 +95,9 @@ enum GlobalObserver {
                 let clickedMonitor = cursor.monitorApproximation
                 switch true {
                     // Detect clicks on desktop of different monitors
-                    case clickedMonitor.visibleRect.contains(cursor) && clickedMonitor.activeWorkspace != focus.workspace:
+                    case clickedMonitor.visibleRect.contains(cursor) && clickedMonitor.visibleWorkspace != globalFocus.workspace:
                         _ = try await runLightSession(.globalObserverLeftMouseUp, token) {
-                            clickedMonitor.activeWorkspace.focusWorkspace()
+                            clickedMonitor.visibleWorkspace.focusWorkspace()
                         }
                     // Detect close button clicks for unfocused windows. Yes, kAXUIElementDestroyedNotification is that unreliable
                     //  And trigger new window detection that could be delayed due to mouseDown event

@@ -21,6 +21,20 @@ final class MasterLayoutTest: XCTestCase {
         assertRect(windows[2], x: 1056, y: screenHeight / 2, width: 864, height: screenHeight / 2)
     }
 
+    /// A window on another macOS Space, or a background native tab, stays in the tree as a tombstone. It must not take
+    /// a slot: the master is the first window that is actually on screen, and the stack shares out the rest
+    func testInvisibleWindowsDoNotTakeASlot() async throws {
+        let (workspace, windows) = masterWorkspace(name, windowCount: 4)
+        windows[0].lifeStatus = .invisible
+
+        try await workspace.layoutWorkspace()
+
+        assertRect(windows[1], x: 0, y: 0, width: 1056, height: screenHeight)
+        assertRect(windows[2], x: 1056, y: 0, width: 864, height: screenHeight / 2)
+        assertRect(windows[3], x: 1056, y: screenHeight / 2, width: 864, height: screenHeight / 2)
+        assertEquals(workspace.rootTilingContainer.masterChildren.toArray(), [windows[1]])
+    }
+
     func testMasterOnTheRight() async throws {
         let (workspace, windows) = masterWorkspace(name, windowCount: 3, orientation: .right)
 
@@ -105,7 +119,7 @@ final class MasterLayoutTest: XCTestCase {
     }
 
     func testCenterWithAZeroThresholdKeepsBothColumns() async throws {
-        config.master = config.master.copy(\.centerStackThreshold, 0)
+        config.master = config.master.with(\.centerStackThreshold, 0)
         let (workspace, windows) = masterWorkspace(name, windowCount: 2, orientation: .center)
 
         try await workspace.layoutWorkspace()
@@ -118,7 +132,7 @@ final class MasterLayoutTest: XCTestCase {
     }
 
     func testCenterFallbackChoosesTheSide() async throws {
-        config.master = config.master.copy(\.centerFallback, .right)
+        config.master = config.master.with(\.centerFallback, .right)
         let (workspace, windows) = masterWorkspace(name, windowCount: 2, orientation: .center)
 
         try await workspace.layoutWorkspace()
@@ -129,7 +143,7 @@ final class MasterLayoutTest: XCTestCase {
     }
 
     func testCenterFallbackCanFlipTheAxis() async throws {
-        config.master = config.master.copy(\.centerFallback, .top)
+        config.master = config.master.with(\.centerFallback, .top)
         let (workspace, windows) = masterWorkspace(name, windowCount: 2, orientation: .center)
 
         try await workspace.layoutWorkspace()
@@ -141,7 +155,7 @@ final class MasterLayoutTest: XCTestCase {
     }
 
     func testInnerGapsSplitTheMasterAndTheStack() async throws {
-        config.gaps = config.gaps.copy(\.inner, .init(vertical: 10, horizontal: 20))
+        config.gaps = config.gaps.with(\.inner, .init(vertical: 10, horizontal: 20))
         let (workspace, windows) = masterWorkspace(name, windowCount: 3)
 
         try await workspace.layoutWorkspace()
@@ -276,10 +290,10 @@ final class MasterNavigationTest: XCTestCase {
         assertEquals(TestWindow.focus(windows[0]), true)
 
         await parseCommand("focus right").cmdOrDie.run(.defaultEnv, .emptyStdin)
-        assertEquals(focus.windowOrNil, windows[1])
+        assertEquals(globalFocus.windowOrNil, windows[1])
 
         await parseCommand("focus left").cmdOrDie.run(.defaultEnv, .emptyStdin)
-        assertEquals(focus.windowOrNil, windows[0])
+        assertEquals(globalFocus.windowOrNil, windows[0])
     }
 
     func testFocusWalksTheStackVertically() async {
@@ -287,10 +301,10 @@ final class MasterNavigationTest: XCTestCase {
         assertEquals(TestWindow.focus(windows[1]), true)
 
         await parseCommand("focus down").cmdOrDie.run(.defaultEnv, .emptyStdin)
-        assertEquals(focus.windowOrNil, windows[2])
+        assertEquals(globalFocus.windowOrNil, windows[2])
 
         await parseCommand("focus up").cmdOrDie.run(.defaultEnv, .emptyStdin)
-        assertEquals(focus.windowOrNil, windows[1])
+        assertEquals(globalFocus.windowOrNil, windows[1])
     }
 
     func testTheMasterHasNoVerticalNeighbours() async {
@@ -299,7 +313,7 @@ final class MasterNavigationTest: XCTestCase {
 
         // The master area holds a single window, so 'down' hits the container boundary
         await parseCommand("focus down").cmdOrDie.run(.defaultEnv, .emptyStdin)
-        assertEquals(focus.windowOrNil, windows[0])
+        assertEquals(globalFocus.windowOrNil, windows[0])
     }
 
     func testFocusReturnsToTheMostRecentWindowOfTheStack() async {
@@ -308,7 +322,7 @@ final class MasterNavigationTest: XCTestCase {
         assertEquals(TestWindow.focus(windows[0]), true)
 
         await parseCommand("focus right").cmdOrDie.run(.defaultEnv, .emptyStdin)
-        assertEquals(focus.windowOrNil, windows[2])
+        assertEquals(globalFocus.windowOrNil, windows[2])
     }
 
     func testFocusInCenterOrientation() async {
@@ -318,15 +332,15 @@ final class MasterNavigationTest: XCTestCase {
         assertEquals(TestWindow.focus(windows[1]), true)
 
         await parseCommand("focus right").cmdOrDie.run(.defaultEnv, .emptyStdin)
-        assertEquals(focus.windowOrNil, windows[0])
+        assertEquals(globalFocus.windowOrNil, windows[0])
 
         await parseCommand("focus right").cmdOrDie.run(.defaultEnv, .emptyStdin)
-        assertEquals(focus.windowOrNil, windows[2])
+        assertEquals(globalFocus.windowOrNil, windows[2])
 
         // windows[3] is below windows[1] in the leading column
         assertEquals(TestWindow.focus(windows[1]), true)
         await parseCommand("focus down").cmdOrDie.run(.defaultEnv, .emptyStdin)
-        assertEquals(focus.windowOrNil, windows[3])
+        assertEquals(globalFocus.windowOrNil, windows[3])
     }
 
     func testMoveDemotesTheMasterAndPromotesAStackWindow() async {
@@ -412,7 +426,7 @@ final class MasterCommandTest: XCTestCase {
         testParseSingleCommandSucc("master set-orientation next", MasterCmdArgs(rawArgs: [], action: .setOrientation(.next)))
         testParseSingleCommandSucc(
             "master --workspace foo add-master",
-            MasterCmdArgs(rawArgs: [], action: .addMaster).copy(\.workspaceName, .parse("foo").getOrDie()),
+            MasterCmdArgs(rawArgs: [], action: .addMaster).with(\.workspaceName, .parse("foo").getOrDie()),
         )
     }
 
@@ -455,10 +469,10 @@ final class MasterCommandTest: XCTestCase {
         assertEquals(TestWindow.focus(windows[2]), true)
 
         await parseCommand("master focus-master").cmdOrDie.run(.defaultEnv, .emptyStdin)
-        assertEquals(focus.windowOrNil, windows[0])
+        assertEquals(globalFocus.windowOrNil, windows[0])
 
         await parseCommand("master focus-master").cmdOrDie.run(.defaultEnv, .emptyStdin)
-        assertEquals(focus.windowOrNil, windows[2])
+        assertEquals(globalFocus.windowOrNil, windows[2])
     }
 
     func testAddAndRemoveMaster() async {
@@ -524,11 +538,11 @@ final class MasterCommandTest: XCTestCase {
         await parseCommand("master rotate-next").cmdOrDie.run(.defaultEnv, .emptyStdin)
         assertEquals(root(name).layoutDescription, .h_master([.window(2), .window(3), .window(1)]))
         // Focus stays on the master slot, so each press flips a different window into it
-        assertEquals(focus.windowOrNil, windows[1])
+        assertEquals(globalFocus.windowOrNil, windows[1])
 
         await parseCommand("master rotate-prev").cmdOrDie.run(.defaultEnv, .emptyStdin)
         assertEquals(root(name).layoutDescription, .h_master([.window(1), .window(2), .window(3)]))
-        assertEquals(focus.windowOrNil, windows[0])
+        assertEquals(globalFocus.windowOrNil, windows[0])
     }
 
     func testRotateNeedsTwoWindows() async {
@@ -551,23 +565,23 @@ final class MasterCommandTest: XCTestCase {
         config.defaultRootContainerLayout = .master
         let container = Workspace.get(byName: name).rootTilingContainer
         container.layout = .master
-        for id in 1 ... 4 { TestWindow.new(id: UInt32(id), parent: container) }
+        for id in 1 ... 4 { TestWindow.new(id: OpaqueWindowId(UInt64(id)), parent: container) }
         assertEquals(TestWindow.new(id: 5, parent: container).focusWindow(), true)
 
         // The startup heuristic would otherwise flip this to accordion, because there are more than 3 windows
         smartLayoutAtStartup()
 
-        assertEquals(focus.workspace.rootTilingContainer.layout, .master)
+        assertEquals(globalFocus.workspace.rootTilingContainer.layout, .master)
     }
 
     func testStartupHeuristicStillAppliesToOtherLayouts() {
         let container = Workspace.get(byName: name).rootTilingContainer
-        for id in 1 ... 4 { TestWindow.new(id: UInt32(id), parent: container) }
+        for id in 1 ... 4 { TestWindow.new(id: OpaqueWindowId(UInt64(id)), parent: container) }
         assertEquals(TestWindow.new(id: 5, parent: container).focusWindow(), true)
 
         smartLayoutAtStartup()
 
-        assertEquals(focus.workspace.rootTilingContainer.layout, .accordion)
+        assertEquals(globalFocus.workspace.rootTilingContainer.layout, .accordion)
     }
 
     func testLayoutCommandTogglesMaster() async {
@@ -623,7 +637,7 @@ final class MasterNewWindowPositionTest: XCTestCase {
     }
 
     func testNewWindowCanBecomeTheMaster() async throws {
-        config.master = config.master.copy(\.newWindowPosition, .master)
+        config.master = config.master.with(\.newWindowPosition, .master)
         let (workspace, windows) = masterWorkspace(name, windowCount: 2)
         assertEquals(TestWindow.focus(windows[0]), true)
 
@@ -633,7 +647,7 @@ final class MasterNewWindowPositionTest: XCTestCase {
     }
 
     func testNewWindowCanGoToTheTopOfTheStack() async throws {
-        config.master = config.master.copy(\.newWindowPosition, .stackStart)
+        config.master = config.master.with(\.newWindowPosition, .stackStart)
         let (workspace, windows) = masterWorkspace(name, windowCount: 2)
         assertEquals(TestWindow.focus(windows[0]), true)
 
@@ -643,7 +657,7 @@ final class MasterNewWindowPositionTest: XCTestCase {
     }
 
     func testNewWindowCanFollowTheFocus() async throws {
-        config.master = config.master.copy(\.newWindowPosition, .afterFocused)
+        config.master = config.master.with(\.newWindowPosition, .afterFocused)
         let (workspace, windows) = masterWorkspace(name, windowCount: 3)
         assertEquals(TestWindow.focus(windows[1]), true)
 
@@ -660,9 +674,9 @@ final class MasterMouseDropTest: XCTestCase {
     /// Master on the left at 55%, so the stack column spans x 1056..1920 and its three windows are ~359.67 tall each.
     ///
     /// The workspace has to be the monitor's active one, because a drop maps the cursor back to a workspace through
-    /// the monitor. `setUpWorkspacesForTests` already made `focus.workspace` active, so build on that one
+    /// the monitor. `setUpWorkspacesForTests` already made `globalFocus.workspace` active, so build on that one
     private func stackWorkspace() async throws -> (Workspace, [TestWindow]) {
-        let (workspace, windows) = masterWorkspace(focus.workspace.name, windowCount: 4)
+        let (workspace, windows) = masterWorkspace(globalFocus.workspace.name, windowCount: 4)
         try await workspace.layoutWorkspace()
         return (workspace, windows)
     }
@@ -719,7 +733,7 @@ final class MasterMouseDropTest: XCTestCase {
     }
 
     func testDroppingIntoAMasterContainerFromANestedContainer() async throws {
-        let (workspace, _) = masterWorkspace(focus.workspace.name, windowCount: 2)
+        let (workspace, _) = masterWorkspace(globalFocus.workspace.name, windowCount: 2)
         let nested = TilingContainer.newVTiles(parent: workspace.rootTilingContainer, adaptiveWeight: 1)
         let nestedWindow = TestWindow.new(id: 3, parent: nested)
         try await workspace.layoutWorkspace()
@@ -814,9 +828,9 @@ final class MasterMouseDropTest: XCTestCase {
     }
 
     func testNonMasterContainersStillSwap() async throws {
-        let workspace = focus.workspace
+        let workspace = globalFocus.workspace
         let container = workspace.rootTilingContainer
-        let windows = (1 ... 3).map { TestWindow.new(id: UInt32($0), parent: container) }
+        let windows = (1 ... 3).map { TestWindow.new(id: OpaqueWindowId(UInt64($0)), parent: container) }
         try await workspace.layoutWorkspace()
 
         // 'tiles' keeps the upstream behavior: the two windows trade places, nothing shifts along
@@ -846,21 +860,21 @@ final class MasterRotateMruTest: XCTestCase {
     override func setUp() async throws { setUpWorkspacesForTests() }
 
     func testRotatingKeepsTheMostRecentlyUsedOrder() async {
-        let (workspace, windows) = masterWorkspace(focus.workspace.name, windowCount: 4)
+        let (workspace, windows) = masterWorkspace(globalFocus.workspace.name, windowCount: 4)
         let root = workspace.rootTilingContainer
         // An order deliberately unlike slot order, so a reset to slot order is visible
         windows[3].markAsMostRecentChild()
         windows[1].markAsMostRecentChild()
-        let before = Array(root.mruChildren).compactMap { ($0 as? Window)?.windowId }
+        let before = Array(root._mruChildren).compactMap { ($0 as? Window)?.windowId }
 
         await parseCommand("master rotate-next").cmdOrDie.run(.defaultEnv, .emptyStdin)
 
         // Rotating rebinds every child, and bind() marks each one most-recent as it goes. Without replaying the
         // captured order the stack collapses to slot order, and swap-with-master, focus-master and cross-column
         // moves -- all of which pick their counterpart from the MRU -- start jumping to arbitrary windows
-        let focused = focus.windowOrNil.orDie().windowId
+        let focused = globalFocus.windowOrNil.orDie().windowId
         let expected = [focused] + before.filter { $0 != focused }
-        assertEquals(Array(root.mruChildren).compactMap { ($0 as? Window)?.windowId }, expected)
+        assertEquals(Array(root._mruChildren).compactMap { ($0 as? Window)?.windowId }, expected)
     }
 }
 
@@ -870,7 +884,7 @@ final class MasterOrientationOwnershipTest: XCTestCase {
 
     func testReorientingANestedContainerLeavesTheMasterAreaWhereItIs() {
         config.enableNormalizationOppositeOrientationForNestedContainers = true
-        let (workspace, _) = masterWorkspace(focus.workspace.name, windowCount: 2)
+        let (workspace, _) = masterWorkspace(globalFocus.workspace.name, windowCount: 2)
         let root = workspace.rootTilingContainer
         let nested = TilingContainer(parent: root, adaptiveWeight: 1, .v, .tiles, index: INDEX_BIND_LAST)
         TestWindow.new(id: 3, parent: nested)
@@ -885,7 +899,7 @@ final class MasterOrientationOwnershipTest: XCTestCase {
 
     func testNormalizationLeavesAContainerNestedInAMasterAreaAlone() {
         config.enableNormalizationOppositeOrientationForNestedContainers = true
-        let (workspace, _) = masterWorkspace(focus.workspace.name, windowCount: 2)
+        let (workspace, _) = masterWorkspace(globalFocus.workspace.name, windowCount: 2)
         let root = workspace.rootTilingContainer
         // join-with builds the nested container perpendicular to the axis the master stacks its children along
         let nested = TilingContainer(parent: root, adaptiveWeight: 1, root.weightOrientation.opposite, .tiles, index: INDEX_BIND_LAST)
@@ -904,7 +918,7 @@ final class MasterMinimumSizeTest: XCTestCase {
     override func setUp() async throws { setUpWorkspacesForTests() }
 
     func testAWindowThatRefusesToShrinkGetsItsRoomFromTheOthers() async throws {
-        let (workspace, windows) = masterWorkspace(focus.workspace.name, windowCount: 4)
+        let (workspace, windows) = masterWorkspace(globalFocus.workspace.name, windowCount: 4)
         // Three stack windows share a 1079pt column, so ~360 each. This one won't go below 500
         windows[1].minObservedSize = CGSize(width: 0, height: 500)
         try await workspace.layoutWorkspace()
@@ -918,7 +932,7 @@ final class MasterMinimumSizeTest: XCTestCase {
     }
 
     func testMinimumsThatCannotFitLeaveTheLayoutAlone() async throws {
-        let (workspace, windows) = masterWorkspace(focus.workspace.name, windowCount: 3)
+        let (workspace, windows) = masterWorkspace(globalFocus.workspace.name, windowCount: 3)
         // Two stack windows, each insisting on more than the whole column. Nothing avoids an overlap, so the
         // ordinary proportional split is what they get
         windows[1].minObservedSize = CGSize(width: 0, height: 900)
@@ -930,7 +944,7 @@ final class MasterMinimumSizeTest: XCTestCase {
     }
 
     func testAnUnconstrainedColumnIsUnaffected() async throws {
-        let (workspace, windows) = masterWorkspace(focus.workspace.name, windowCount: 3)
+        let (workspace, windows) = masterWorkspace(globalFocus.workspace.name, windowCount: 3)
         try await workspace.layoutWorkspace()
 
         assertApproxEquals(windows[1].lastAppliedLayoutPhysicalRect.orDie().height, 539.5)
@@ -951,13 +965,13 @@ private func masterWorkspace(
     container.layout = .master
     container.setOrientationDirectly(orientation.axis)
     container.master = MasterState(placement: orientation.placement, count: count, fraction: fraction)
-    let windows = (1 ... windowCount).map { TestWindow.new(id: UInt32($0), parent: container) }
+    let windows = (1 ... windowCount).map { TestWindow.new(id: OpaqueWindowId(UInt64($0)), parent: container) }
     return (workspace, windows)
 }
 
 /// Runs the same binding logic that a freshly detected window goes through
 @MainActor
-private func newTilingWindow(id: UInt32, on workspace: Workspace) async throws {
+private func newTilingWindow(id: OpaqueWindowId, on workspace: Workspace) async throws {
     // relayoutWindow unbinds the window first, so the initial parent doesn't influence where it lands
     let window = TestWindow.new(id: id, parent: workspace.rootTilingContainer)
     try await window.relayoutWindow(on: workspace, .nonCancellable, forceTile: true)

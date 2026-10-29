@@ -7,7 +7,7 @@ open class TreeNode: Equatable, AeroAny {
     fileprivate final weak var _parent: NonLeafTreeNodeObject? = nil
     final var parent: NonLeafTreeNodeObject? { _parent }
     private var adaptiveWeight: CGFloat
-    private let _mruChildren: MruStack<TreeNode> = MruStack()
+    let _mruChildren: MruStack<TreeNode> = MruStack()
     // Usages:
     // - resize with mouse
     // - makeFloatingWindowsSeenAsTiling in focus command
@@ -68,6 +68,10 @@ open class TreeNode: Equatable, AeroAny {
     @MainActor
     @discardableResult
     func bind(to newParent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) -> BindingData? {
+        if isDebug, let newParent = newParent as? TilingContainer, newParent.lifeStatus != .alive {
+            die("Binding is possible only to alive TilingContainers")
+        }
+
         let result = unbindIfBound()
 
         if newParent === NilTreeNode.instance {
@@ -75,13 +79,13 @@ open class TreeNode: Equatable, AeroAny {
         }
         let relation = getChildParentRelation(child: self, parent: newParent) // Side effect: verify relation
         if adaptiveWeight == WEIGHT_AUTO {
-            self.adaptiveWeight = switch relation {
+            switch relation {
                 case .tiling(let newParent):
-                    newParent.autoWeight(forChildInsertedAt: index)
+                    self.adaptiveWeight = newParent.autoWeight(forChildInsertedAt: index)
                 case .floatingWindow, .macosNativeFullscreenWindow,
                      .rootTilingContainer, .macosNativeMinimizedWindow,
                      .shimContainerRelation, .macosPopupWindow, .macosNativeHiddenAppWindow:
-                    WEIGHT_DOESNT_MATTER
+                    self.adaptiveWeight = WEIGHT_DOESNT_MATTER
             }
         } else {
             self.adaptiveWeight = adaptiveWeight
@@ -116,7 +120,13 @@ open class TreeNode: Equatable, AeroAny {
 
     var mostRecentChild: TreeNode? { _mruChildren.mostRecent ?? children.last }
 
-    var mruChildren: MruStack<TreeNode> { _mruChildren }
+    var mostRecentInhabitedChild: TreeNode? {
+        _mruChildren.first { $0.tilingTreeNodeCasesOrDie().isInhabited } ?? inhabitedChildren.last
+    }
+
+    var inhabitedChildren: [TreeNode] {
+        children.filter { $0.tilingTreeNodeCasesOrDie().isInhabited }
+    }
 
     @discardableResult
     func unbindFromParent() -> BindingData {

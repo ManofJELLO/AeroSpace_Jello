@@ -5,11 +5,12 @@ import Common
 private var moveWithMouseTask: Task<(), any Error>? = nil
 
 func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableRawPointer?) {
-    let windowId = ax.containingWindowId()
+    let nativeWindowId = ax.containingNativeWindowId()
     let notif = notif as String
+    let pid = ax.pid
     Task.startUnstructured { @MainActor in
         guard let token: RunSessionGuard = .isServerEnabled else { return }
-        guard let windowId, let window = Window.get(byId: windowId) else {
+        guard let nativeWindowId, let pid, let window = Window.get(byNativeId: nativeWindowId, pid: pid) else {
             scheduleCancellableCompleteRefreshSession(.ax(notif))
             return
         }
@@ -59,13 +60,13 @@ private func moveWithMouse(_ window: Window) async throws { // todo cover with t
             } else {
                 beginTilingDrag(window)
             }
-        case .unbound: return
+        case nil: return
     }
 }
 
 @MainActor
 private func moveFloatingWindow(_ window: Window) async throws {
-    guard let targetWorkspace = try await window.getCenter(.cancellable)?.monitorApproximation.activeWorkspace else { return }
+    guard let targetWorkspace = try await window.getCenter(.cancellable)?.monitorApproximation.visibleWorkspace else { return }
     guard let parent = window.parent else { return }
     if targetWorkspace != parent {
         window.bindAsFloatingWindow(to: targetWorkspace)
@@ -85,7 +86,7 @@ private func moveWithMouseWouldChangeLayout(_ window: Window) -> Bool {
             guard let preview = dragPreview else { return false }
             return preview.intent(at: mouseLocation, dragged: window) != preview.appliedIntent
         case .floatingWindowsContainer, .macosFullscreenWindowsContainer, .macosMinimizedWindowsContainer,
-             .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer, .unbound:
+             .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer, nil:
             return true
     }
 }
@@ -138,13 +139,13 @@ func resetTilingDragPreview() { dragPreview = nil }
 private final class TilingDragPreview {
     private let workspaceName: String
     private let rootTilingNode: FrozenContainer
-    private let mruWindowIds: [UInt32]
-    private let rects: [UInt32: Rect]
+    private let mruWindowIds: [OpaqueWindowId]
+    private let rects: [OpaqueWindowId: Rect]
     /// The drop currently on screen, so that an event resolving to the same one can be skipped
     private(set) var appliedIntent: DragIntent? = nil
 
     init(dragged: Window) {
-        let workspace = dragged.nodeWorkspace ?? focus.workspace
+        let workspace = dragged.nodeWorkspace ?? globalFocus.workspace
         let root = workspace.rootTilingContainer
         workspaceName = workspace.name
         rootTilingNode = FrozenContainer(root)
@@ -159,7 +160,7 @@ private final class TilingDragPreview {
     func intent(at cursor: CGPoint, dragged: Window) -> DragIntent {
         let target = rects.first { $0.key != dragged.windowId && $0.value.contains(cursor) }
         return DragIntent(
-            workspaceName: cursor.monitorApproximation.activeWorkspace.name,
+            workspaceName: cursor.monitorApproximation.visibleWorkspace.name,
             targetWindowId: target?.key,
             pastHorizontalMidpoint: target.map { cursor.x > $0.value.center.x } ?? false,
             pastVerticalMidpoint: target.map { cursor.y > $0.value.center.y } ?? false,
@@ -207,7 +208,7 @@ private final class TilingDragPreview {
 // periphery:ignore - every field is read by the synthesized Equatable, which periphery doesn't follow
 private struct DragIntent: Equatable {
     let workspaceName: String
-    let targetWindowId: UInt32?
+    let targetWindowId: OpaqueWindowId?
     let pastHorizontalMidpoint: Bool
     let pastVerticalMidpoint: Bool
 }
@@ -240,24 +241,27 @@ func moveTilingWindow(_ window: Window, cursor: CGPoint) {
 /// `rects` overrides where each window is taken to be. A live preview passes the pre-drag rects so that the drop
 /// targets stay still while the preview rearranges the windows underneath the cursor
 @MainActor
-private func planTilingDrop(_ window: Window, cursor: CGPoint, rects: [UInt32: Rect]? = nil) -> TilingDrop? {
-    let targetWorkspace = cursor.monitorApproximation.activeWorkspace
+private func planTilingDrop(_ window: Window, cursor: CGPoint, rects: [OpaqueWindowId: Rect]? = nil) -> TilingDrop? {
+    let targetWorkspace = cursor.monitorApproximation.visibleWorkspace
     let dropTarget = dropTargetWindow(at: cursor, in: targetWorkspace, excluding: window, rects: rects)
     if targetWorkspace != window.nodeWorkspace { // Move window to a different monitor
-        let index: Int = if let dropTarget, let parent = dropTarget.parent as? TilingContainer, let targetRect = dropTarget.rectForDrop(rects) {
+        let parent: TilingContainer
+        let index: Int
+        if let dropTarget,
+           let (_parent, _index) = dropTarget.nearestAliveTilingParent(),
+           let targetRect = dropTarget.rectForDrop(rects)
+        {
+            parent = _parent
             // weightOrientation is the axis along which the parent orders its children. It differs from 'orientation'
             // for master containers, whose children are stacked across the master/stack split
-            cursor.getProjection(parent.weightOrientation) >= targetRect.center.getProjection(parent.weightOrientation)
-                ? dropTarget.ownIndex.orDie() + 1
-                : dropTarget.ownIndex.orDie()
+            index = cursor.getProjection(_parent.weightOrientation) >= targetRect.center.getProjection(_parent.weightOrientation)
+                ? _index + 1
+                : _index
         } else {
-            0
+            parent = targetWorkspace.rootTilingContainer
+            index = 0
         }
-        return .bind(
-            parent: dropTarget?.parent ?? targetWorkspace.rootTilingContainer,
-            index: index,
-            adaptiveWeight: WEIGHT_AUTO,
-        )
+        return .bind(parent: parent, index: index, adaptiveWeight: WEIGHT_AUTO)
     }
     guard let dropTarget else { return nil }
     // The dragged window goes where the pointer is. Which half of the target the pointer landed in doesn't come
@@ -265,7 +269,7 @@ private func planTilingDrop(_ window: Window, cursor: CGPoint, rects: [UInt32: R
     // master's midpoint would answer "the slot after the master" -- the top of the stack, the opposite of what was
     // pointed at
     guard let masterParent = (dropTarget.parent as? TilingContainer)?.takeIf({ $0.layout == .master }),
-          let targetIndex = dropTarget.ownIndex
+          let targetIndex = dropTarget.ownIndex(in: .all)
     else {
         // 'tiles' and 'accordion' keep AeroSpace's "swap with the window underneath" behavior
         return .swap(with: dropTarget)
@@ -293,7 +297,7 @@ private func dropTargetWindow(
     at cursor: CGPoint,
     in workspace: Workspace,
     excluding window: Window,
-    rects: [UInt32: Rect]?,
+    rects: [OpaqueWindowId: Rect]?,
 ) -> Window? {
     // The frozen rects describe the workspace the drag started in, and only that one. Another monitor's windows
     // aren't in them, so consulting them there finds no target and every cross-monitor drop lands at index 0.
@@ -323,7 +327,7 @@ extension Window {
     }
 
     @MainActor
-    fileprivate func rectForDrop(_ rects: [UInt32: Rect]?) -> Rect? {
+    fileprivate func rectForDrop(_ rects: [OpaqueWindowId: Rect]?) -> Rect? {
         rects.map { $0[windowId] } ?? lastAppliedLayoutPhysicalRect
     }
 }
@@ -348,11 +352,11 @@ extension CGPoint {
         let point = self
         let target: TreeNode? = switch tree.layout {
             case .tiles, .master:
-                tree.children.first(where: {
+                tree.inhabitedChildren.first(where: {
                     (virtual ? $0.lastAppliedLayoutVirtualRect : $0.lastAppliedLayoutPhysicalRect)?.contains(point) == true
                 })
             case .accordion:
-                tree.mostRecentChild
+                tree.mostRecentInhabitedChild
         }
         guard let target else { return nil }
         return switch target.tilingTreeNodeCasesOrDie() {

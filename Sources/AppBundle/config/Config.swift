@@ -32,7 +32,7 @@ var defaultConfigUrl: URL {
 @MainActor var config: Config = defaultConfig // todo move to Ctx?
 @MainActor var configUrl: URL = defaultConfigUrl
 
-struct Config: ConvenienceMutable {
+struct Config: Withable {
     var configVersion: ConfigVersion = ._1
     var _afterLoginCommand: [any Command] = []
     var afterStartupCommand: Shell<any Command> = .empty
@@ -74,7 +74,7 @@ struct Config: ConvenienceMutable {
     var onModeChanged: Shell<any Command> = .empty
 }
 
-struct FocusFollowsMouse: ConvenienceMutable {
+struct FocusFollowsMouse: Withable {
     var enabled: Bool = false
     /// How long the pointer has to stay inside a window before it takes focus. Dwell time, not stopped time: the
     /// pointer never has to hold still. `0` focuses as soon as the pointer is over the window.
@@ -109,7 +109,7 @@ extension FocusFollowsMouseDisableKey {
 ///
 /// These values seed newly created `master` containers. Once a container exists, the `master` command changes it
 /// directly, and the container keeps its own values until the config is reloaded
-struct MasterConfig: ConvenienceMutable, Equatable, Sendable {
+struct MasterConfig: Withable, Equatable, Sendable {
     /// Where the master area sits. Also decides the container orientation
     var orientation: MasterOrientation = .left
     /// How many windows the master area holds

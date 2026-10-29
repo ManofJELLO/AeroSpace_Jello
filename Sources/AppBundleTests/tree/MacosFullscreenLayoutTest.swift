@@ -374,8 +374,8 @@ final class MacosFullscreenLayoutTest: XCTestCase {
         assertEquals(w1.hWeight, 1) // the command's sizes won, the snapshot did not come back
     }
 
-    /// `BalanceSizesCommand` rewrites every tiling weight in the workspace (`child.setWeight(parent.orientation, 1)`
-    /// recursively), which is plainly a layout change, so it must invalidate the snapshot exactly like
+    /// `BalanceSizesCommand` rewrites every tiling weight in the workspace (evening out siblings recursively), which
+    /// is plainly a layout change, so it must invalidate the snapshot exactly like
     /// `testLayoutChangingCommandInvalidatesTheSnapshot` demonstrates for `flatten-workspace-tree`.
     func testBalanceSizesInvalidatesTheSnapshot() async throws {
         let workspace = Workspace.get(byName: name)
@@ -388,11 +388,11 @@ final class MacosFullscreenLayoutTest: XCTestCase {
         try await normalizeLayoutReason()
         assertEquals(workspace.rootTilingContainer.layoutDescription, .h_tiles([.window(1), .window(3)]))
 
-        // balance-sizes sets every remaining tiled sibling's weight to 1, deliberately rebalancing the layout
-        // while w2 is away in fullscreen.
+        // balance-sizes evens out every remaining tiled sibling (to the average of their weights, 250),
+        // deliberately rebalancing the layout while w2 is away in fullscreen.
         _ = await parseCommand("balance-sizes").cmdOrDie.run(.defaultEnv, .emptyStdin)
-        assertEquals(w1.hWeight, 1)
-        assertEquals(w3.hWeight, 1)
+        assertEquals(w1.hWeight, 250)
+        assertEquals(w3.hWeight, 250)
 
         w2.isMacosFullscreenForTest = false
         try await normalizeLayoutReason()
@@ -401,8 +401,8 @@ final class MacosFullscreenLayoutTest: XCTestCase {
             workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.windowId).toSet(),
             [1, 2, 3],
         )
-        assertEquals(w1.hWeight, 1) // balance-sizes's weights won, the snapshot did not come back
-        assertEquals(w3.hWeight, 1)
+        assertEquals(w1.hWeight, 250) // balance-sizes's weights won, the snapshot (200/300) did not come back
+        assertEquals(w3.hWeight, 250)
     }
 
     func testResettingSnapshotsFallsBackToOldBehavior() async throws {
