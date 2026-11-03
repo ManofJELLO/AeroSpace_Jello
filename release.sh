@@ -112,21 +112,31 @@ echo "dry run:  $dry_run"
 ### Build            ###
 ########################
 
-# generate.sh rewrites tracked files (versionGenerated.swift, gitHashGenerated.swift,
-# cmdHelpGenerated.swift). Always put them back, even if we fail partway.
+# generate.sh can rewrite tracked files (cmdHelpGenerated.swift). Always put them
+# back, even if we fail partway.
 restore_generated() {
     echo "==> Restoring generated files"
     git restore --staged --worktree . 2> /dev/null || true
 }
 trap restore_generated EXIT
 
-step "Generating version metadata"
+step "Generating sources"
 # --ignore-xcodeproj avoids needing xcodegen; the .xcodeproj is committed.
-./generate.sh --ignore-xcodeproj --build-version "$build_version" --generate-git-hash
+./generate.sh --ignore-xcodeproj
+
+# Version and git hash are embedded as a Mach-O section (read back in
+# Sources/Common/buildInfo.swift), same as upstream's build-release.sh.
+# .build-info.txt is gitignored.
+build_info_file="$PWD/.build-info.txt"
+printf '%s\n%s\n%s\n' "$build_version" "$(git rev-parse HEAD)" "$(git rev-parse --short HEAD)" > "$build_info_file"
 
 step "Building universal CLI"
 swift_build_cli=(build -c release --arch arm64 --arch x86_64 --product aerospace)
-swift "${swift_build_cli[@]}"
+swift "${swift_build_cli[@]}" \
+    -Xlinker -sectcreate \
+    -Xlinker __TEXT \
+    -Xlinker __aero_build \
+    -Xlinker "$build_info_file"
 # Ask swift where the binary landed instead of guessing: the path moves between toolchains
 cli_bin_path="$(swift "${swift_build_cli[@]}" --show-bin-path)"
 
@@ -160,7 +170,9 @@ rm -rf .release && mkdir -p .release
         -destination "generic/platform=macOS" \
         -configuration Release \
         -derivedDataPath .xcode-build \
-        CODE_SIGN_IDENTITY="$codesign_identity" \
+        MARKETING_VERSION="$build_version" \
+        AEROSPACE_CODE_SIGN_IDENTITY="$codesign_identity" \
+        AEROSPACE_BUILD_INFO_LDFLAGS="-sectcreate __TEXT __aero_build $build_info_file" \
         CODE_SIGN_STYLE=Manual \
         DEVELOPMENT_TEAM="" \
         > ../.release/xcodebuild.log 2>&1 \
@@ -182,6 +194,13 @@ test -f "$cli_src" || die "missing $cli_src"
 mkdir -p ".release/$zip_root/bin"
 cp -r "$app_src" ".release/$zip_root/"
 cp "$cli_src" ".release/$zip_root/bin/"
+# Strip non-portable rpaths (e.g. the toolchain dir on this machine), as upstream does
+# https://github.com/swiftlang/swift-package-manager/issues/10760
+xcrun objdump --macho --rpaths --no-leading-headers --arch all ".release/$zip_root/bin/aerospace" \
+    | { grep -vE '^(@|/usr/lib/swift$)' || true; } | sort -u \
+    | while IFS= read -r rpath; do
+        install_name_tool -delete_rpath "$rpath" ".release/$zip_root/bin/aerospace"
+    done
 codesign --force --sign "$codesign_identity" ".release/$zip_root/bin/aerospace"
 if test -d legal; then cp -r legal ".release/$zip_root/legal"; fi
 
@@ -195,9 +214,15 @@ check_universal() {
 }
 check_universal ".release/$zip_root/AeroSpace.app/Contents/MacOS/AeroSpace"
 check_universal ".release/$zip_root/bin/aerospace"
-strings ".release/$zip_root/AeroSpace.app/Contents/MacOS/AeroSpace" \
-    | grep -F "$(git rev-parse HEAD)" > /dev/null \
-    || die "app doesn't contain the current git hash"
+check_build_info() {
+    # Section must exist, and the hash (written only into that section) must be in the file
+    otool -arch arm64 -l "$1" | grep "sectname __aero_build" > /dev/null \
+        || die "$1 has no __aero_build section"
+    LC_ALL=C grep -aF "$(git rev-parse HEAD)" "$1" > /dev/null \
+        || die "$1 doesn't carry the current git hash"
+}
+check_build_info ".release/$zip_root/AeroSpace.app/Contents/MacOS/AeroSpace"
+check_build_info ".release/$zip_root/bin/aerospace"
 
 (cd .release && zip -qr "$zip_name" "$zip_root")
 sha=$(shasum -a 256 ".release/$zip_name" | awk '{print $1}')

@@ -3,8 +3,10 @@ import Common
 
 final class TilingContainer: TreeNode, NonLeafTreeNodeObject { // todo consider renaming to GenericContainer
     fileprivate var _orientation: Orientation
-    var orientation: Orientation { _orientation }
     private var _layout: Layout
+    var lifeStatus: TilingContainerLifeStatus = .alive // todo tighten its visibility
+
+    var orientation: Orientation { _orientation }
     var layout: Layout {
         get { _layout }
         set(value) {
@@ -12,9 +14,15 @@ final class TilingContainer: TreeNode, NonLeafTreeNodeObject { // todo consider 
             _layout =  value
         }
     }
-    var lifeStatus: TilingContainerLifeStatus = .alive // todo tighten its visibility
     /// Only meaningful when ``layout`` is ``Layout/master``. See ``MasterState``
     var master: MasterState
+
+    func copyFrom(_ other: TilingContainer) {
+        self._orientation = other.orientation
+        self._layout = other.layout
+        self.lifeStatus = other.lifeStatus
+        self.master = other.master
+    }
 
     @MainActor
     init(
