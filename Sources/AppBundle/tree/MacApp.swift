@@ -428,12 +428,13 @@ final class MacApp: AbstractApp {
     private var bgTabsScheduledForPrune: Set<UInt32> = []
     private var lifeStatusesOfLastRefresh: [UInt32: WindowLifeStatus] = [:]
     @MainActor private func nonidempotentNativeTabSwapHeuristic(_ aliveOrInvisible: inout [UInt32: WindowLifeStatus]) {
-        let noLongerAlive = lifeStatusesOfLastRefresh.filter { (id, lifeStatus) in lifeStatus == .alive && aliveOrInvisible[id] != .alive }
-        let becameAlive = aliveOrInvisible.filter { (id, lifeStatus) in lifeStatus == .alive && lifeStatusesOfLastRefresh[id] != .alive }
+        let swap = detectNativeTabSwap(
+            lastRefresh: lifeStatusesOfLastRefresh,
+            thisRefresh: aliveOrInvisible,
+            hasOpaqueWindowId: { opaqueWindowId(of: $0) != nil },
+        )
         lifeStatusesOfLastRefresh = aliveOrInvisible
-        if let backgroundTabId = noLongerAlive.singleOrNil()?.key,
-           let frontmostTabId = becameAlive.singleOrNil()?.key
-        {
+        if let (backgroundTabId, frontmostTabId) = swap {
             let tabGroupWindowId = getOrRegisterOpaqueWindowId(backgroundTabId)
             windowIdMapping.put(tabGroupWindowId, frontmostTabId)
             aliveOrInvisible[backgroundTabId] = nil
@@ -480,6 +481,28 @@ final class MacApp: AbstractApp {
             try? body(window, job)
         } ?? .cancelled
     }
+}
+
+/// The two native windows that traded places as tabs of one tab group between two refreshes, if any.
+///
+/// A window that already has an `OpaqueWindowId` is never the incoming tab: a tab that was never seen doesn't have
+/// one yet, and a tab that went to the background lost its own when the swap handed it to its replacement. Without
+/// this check, a throwaway window that dies just as a real window comes back looks exactly like a swap. Chrome makes
+/// one for the animation out of macOS native fullscreen. The real window would then inherit the throwaway's identity,
+/// and its own identity would be garbage collected along with everything attached to it, such as the layout snapshot
+/// that was going to put it back in its slot
+func detectNativeTabSwap(
+    lastRefresh: [UInt32: WindowLifeStatus],
+    thisRefresh: [UInt32: WindowLifeStatus],
+    hasOpaqueWindowId: (UInt32) -> Bool,
+) -> (backgroundTabId: UInt32, frontmostTabId: UInt32)? {
+    let noLongerAlive = lastRefresh.filter { (id, lifeStatus) in lifeStatus == .alive && thisRefresh[id] != .alive }
+    let becameAlive = thisRefresh.filter { (id, lifeStatus) in lifeStatus == .alive && lastRefresh[id] != .alive }
+    guard let backgroundTabId = noLongerAlive.singleOrNil()?.key,
+          let frontmostTabId = becameAlive.singleOrNil()?.key,
+          !hasOpaqueWindowId(frontmostTabId)
+    else { return nil }
+    return (backgroundTabId, frontmostTabId)
 }
 
 private final class AxWindow {
