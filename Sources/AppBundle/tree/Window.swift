@@ -47,8 +47,15 @@ open class Window: TreeNode, Hashable {
 
     func getAxSize(_ cm: CancellationMode) async throws -> CGSize? { die("Not implemented") }
     func getTitle(_ cm: CancellationMode) async throws -> String { die("Not implemented") }
+
     func isMacosFullscreen(_ cm: CancellationMode) async throws -> Bool { false }
-    func isMacosMinimized(_ cm: CancellationMode) async throws -> Bool { false } // todo replace with enum MacOsWindowNativeState { normal, fullscreen, invisible }
+    func isMacosMinimized(_ cm: CancellationMode) async throws -> Bool { false }
+    func getMacosWindowNativeState(_ cm: CancellationMode) async throws -> MacosWindowNativeState {
+        if try await isMacosFullscreen(cm) { return .nativeFullscreen }
+        if try await isMacosMinimized(cm) { return .nativeMinimized }
+        return .normal
+    }
+
     var isHiddenInCorner: Bool { die("Not implemented") }
     @MainActor func nativeFocus() { nativeFocus(raise: true) }
     /// `raise: false` gives the window keyboard focus without pulling it in front of its app's other windows.
@@ -87,6 +94,12 @@ extension Window {
     func minObservedExtent(_ orientation: Orientation) -> CGFloat {
         orientation == .h ? minObservedSize.width : minObservedSize.height
     }
+}
+
+enum MacosWindowNativeState: Sendable {
+    case normal
+    case nativeMinimized
+    case nativeFullscreen
 }
 
 enum LayoutReason: Equatable {

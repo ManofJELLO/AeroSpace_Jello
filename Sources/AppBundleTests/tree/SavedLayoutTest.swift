@@ -1,11 +1,13 @@
 @testable import AppBundle
-import XCTest
+import Foundation
+import Testing
 
 @MainActor
-final class SavedLayoutTest: XCTestCase {
-    override func setUp() async throws { setUpWorkspacesForTests() }
+@Suite(.serializedGlobally)
+struct SavedLayoutTest {
+    init() { setUpWorkspacesForTests() }
 
-    func testTheTreeSurvivesARoundTripThroughJson() throws {
+    @Test func testTheTreeSurvivesARoundTripThroughJson() throws {
         let workspace = Workspace.get(byName: name)
         let root = workspace.rootTilingContainer
         root.layout = .master
@@ -34,13 +36,13 @@ final class SavedLayoutTest: XCTestCase {
                     case .window(let w):
                         assertEquals(w.id, 3)
                         assertEquals(w.weight, 3)
-                    case .container: XCTFail("expected a window")
+                    case .container: Issue.record(Comment(rawValue: "expected a window"))
                 }
-            case .window: XCTFail("expected a container")
+            case .window: Issue.record(Comment(rawValue: "expected a container"))
         }
     }
 
-    func testAWindowMissingFromTheSnapshotIsTiledRatherThanOrphaned() async throws {
+    @Test func testAWindowMissingFromTheSnapshotIsTiledRatherThanOrphaned() async throws {
         let workspace = Workspace.get(byName: name)
         let root = workspace.rootTilingContainer
         let known = TestWindow.new(id: 1, parent: root)
@@ -57,12 +59,12 @@ final class SavedLayoutTest: XCTestCase {
         try await tileWindowsTheSnapshotDidNotClaim(potentialOrphans, on: workspace)
 
         let tiled = workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.windowId).toSet()
-        XCTAssertTrue(tiled.contains(known.windowId))
-        XCTAssertTrue(tiled.contains(newcomer.windowId), "the window absent from the snapshot was dropped")
-        XCTAssertNotNil(newcomer.parent)
+        assertTrue(tiled.contains(known.windowId))
+        #expect(tiled.contains(newcomer.windowId), "the window absent from the snapshot was dropped")
+        assertNotNil(newcomer.parent)
     }
 
-    func testARebuiltTreeMatchesTheOneItWasSavedFrom() throws {
+    @Test func testARebuiltTreeMatchesTheOneItWasSavedFrom() throws {
         let workspace = Workspace.get(byName: name)
         let root = workspace.rootTilingContainer
         root.layout = .tiles

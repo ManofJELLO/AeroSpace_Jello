@@ -1,11 +1,12 @@
 @testable import AppBundle
-import XCTest
+import Testing
 
 @MainActor
-final class FloatingWindowsOnTopTest: XCTestCase {
-    override func setUp() async throws { setUpWorkspacesForTests() }
+@Suite(.serializedGlobally)
+struct FloatingWindowsOnTopTest {
+    init() { setUpWorkspacesForTests() }
 
-    func testFocusingATiledWindowRaisesItsAppsFloatingWindows() {
+    @Test func testFocusingATiledWindowRaisesItsAppsFloatingWindows() {
         let workspace = Workspace.get(byName: name)
         let tiled = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
         let floating = TestWindow.new(id: 2, parent: workspace.floatingWindowsContainer)
@@ -13,7 +14,7 @@ final class FloatingWindowsOnTopTest: XCTestCase {
         assertEquals(tiled.floatingWindowsToRaise.map(\.windowId), [floating.windowId])
     }
 
-    func testFloatingWindowsOfOtherAppsAreLeftAlone() {
+    @Test func testFloatingWindowsOfOtherAppsAreLeftAlone() {
         let workspace = Workspace.get(byName: name)
         let tiled = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
         // macOS stacks by app, so this one is out of reach: no AX request can lift it above 'tiled'
@@ -22,7 +23,7 @@ final class FloatingWindowsOnTopTest: XCTestCase {
         assertEquals(tiled.floatingWindowsToRaise, [])
     }
 
-    func testFocusingAFloatingWindowRaisesNothing() {
+    @Test func testFocusingAFloatingWindowRaisesNothing() {
         let workspace = Workspace.get(byName: name)
         TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
         let floating = TestWindow.new(id: 2, parent: workspace.floatingWindowsContainer)
@@ -31,7 +32,7 @@ final class FloatingWindowsOnTopTest: XCTestCase {
         assertEquals(floating.floatingWindowsToRaise, [])
     }
 
-    func testNothingIsRaisedOverAMacosNativeFullscreenWindow() {
+    @Test func testNothingIsRaisedOverAMacosNativeFullscreenWindow() {
         let workspace = Workspace.get(byName: name)
         let tiled = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
         TestWindow.new(id: 2, parent: workspace.floatingWindowsContainer)
@@ -40,7 +41,7 @@ final class FloatingWindowsOnTopTest: XCTestCase {
         assertEquals(tiled.floatingWindowsToRaise, [])
     }
 
-    func testFloatingWindowsOnTopOffLeavesStackingToMacos() {
+    @Test func testFloatingWindowsOnTopOffLeavesStackingToMacos() {
         config.floatingWindowsOnTop = false
         let workspace = Workspace.get(byName: name)
         let tiled = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)

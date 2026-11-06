@@ -1,12 +1,13 @@
 @testable import AppBundle
 import Common
-import XCTest
+import Testing
 
 @MainActor
-final class MacosFullscreenLayoutTest: XCTestCase {
-    override func setUp() async throws { setUpWorkspacesForTests() }
+@Suite(.serializedGlobally)
+struct MacosFullscreenLayoutTest {
+    init() { setUpWorkspacesForTests() }
 
-    func testExitingFullscreenPutsTheWindowBackInTheTilingTree() async throws {
+    @Test func testExitingFullscreenPutsTheWindowBackInTheTilingTree() async throws {
         let workspace = Workspace.get(byName: name)
         let w1 = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
         let w2 = TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
@@ -25,7 +26,7 @@ final class MacosFullscreenLayoutTest: XCTestCase {
         )
     }
 
-    func testRestoresSlotAndWeights() async throws {
+    @Test func testRestoresSlotAndWeights() async throws {
         let workspace = Workspace.get(byName: name)
         let w1 = TestWindow.new(id: 1, parent: workspace.rootTilingContainer, adaptiveWeight: 200)
         let w2 = TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: 500)
@@ -52,7 +53,7 @@ final class MacosFullscreenLayoutTest: XCTestCase {
         assertEquals(w3.hWeight, 500)
     }
 
-    func testRestoresContainerThatWasFlattenedAway() async throws {
+    @Test func testRestoresContainerThatWasFlattenedAway() async throws {
         config.enableNormalizationFlattenContainers = true
         let workspace = Workspace.get(byName: name)
         let root = workspace.rootTilingContainer
@@ -82,7 +83,7 @@ final class MacosFullscreenLayoutTest: XCTestCase {
     /// unfixed, that resets every container's MRU to plain document order on every restore - the sibling the user
     /// was actually last working in gets forgotten in favor of whichever sibling happens to be last in the
     /// container's children array.
-    func testRestorePreservesSiblingsMru() async throws {
+    @Test func testRestorePreservesSiblingsMru() async throws {
         let workspace = Workspace.get(byName: name)
         let w1 = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
         let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: 1, .h, .accordion, index: INDEX_BIND_LAST)
@@ -111,7 +112,7 @@ final class MacosFullscreenLayoutTest: XCTestCase {
     /// the cache forever - neither this exit (config off, so the restore is skipped) nor a config reload (which
     /// doesn't touch this cache) consumes it. A later, wholly unrelated fullscreen cycle for the same window can
     /// then have that stale snapshot misapplied to it.
-    func testStaleSnapshotDoesNotLeakAcrossConfigToggle() async throws {
+    @Test func testStaleSnapshotDoesNotLeakAcrossConfigToggle() async throws {
         let workspace = Workspace.get(byName: name)
         let w1 = TestWindow.new(id: 1, parent: workspace.rootTilingContainer, adaptiveWeight: 200)
         let w2 = TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: 500)
@@ -143,7 +144,7 @@ final class MacosFullscreenLayoutTest: XCTestCase {
         assertEquals(w1.hWeight, 999) // cycle 1's stale snapshot must not have been applied
     }
 
-    func testConfigOptionOffKeepsOldBehavior() async throws {
+    @Test func testConfigOptionOffKeepsOldBehavior() async throws {
         config.preserveLayoutOnMacosNativeFullscreen = false
         let workspace = Workspace.get(byName: name)
         let w1 = TestWindow.new(id: 1, parent: workspace.rootTilingContainer, adaptiveWeight: 200)
@@ -164,7 +165,7 @@ final class MacosFullscreenLayoutTest: XCTestCase {
         assertEquals(w1.hWeight, 600) // not restored
     }
 
-    func testWindowOpenedDuringFullscreenIsKept() async throws {
+    @Test func testWindowOpenedDuringFullscreenIsKept() async throws {
         let workspace = Workspace.get(byName: name)
         let w1 = TestWindow.new(id: 1, parent: workspace.rootTilingContainer, adaptiveWeight: 200)
         let w2 = TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: 500)
@@ -186,7 +187,7 @@ final class MacosFullscreenLayoutTest: XCTestCase {
         assertEquals(w2.hWeight, 500)
     }
 
-    func testWindowClosedDuringFullscreenIsSkipped() async throws {
+    @Test func testWindowClosedDuringFullscreenIsSkipped() async throws {
         let workspace = Workspace.get(byName: name)
         let w1 = TestWindow.new(id: 1, parent: workspace.rootTilingContainer, adaptiveWeight: 200)
         let w2 = TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: 500)
@@ -209,7 +210,7 @@ final class MacosFullscreenLayoutTest: XCTestCase {
         assertEquals(w2.hWeight, 500)
     }
 
-    func testExitingOneFullscreenLeavesTheOtherFullscreen() async throws {
+    @Test func testExitingOneFullscreenLeavesTheOtherFullscreen() async throws {
         let workspace = Workspace.get(byName: name)
         // Unequal weights so this test actually discriminates: with the default weight of 1 on every window, a
         // relayout with no restore at all (i.e. the feature removed) produces this exact same tree shape, so an
@@ -245,7 +246,7 @@ final class MacosFullscreenLayoutTest: XCTestCase {
     /// while it was away in its own macOS Space). When that happens, the restore must decline and fall back to a
     /// plain relayout on the workspace the window actually returned to - it must never splice a snapshot taken on
     /// one workspace into another workspace's tree.
-    func testMismatchedWorkspaceDeclinesTheRestore() async throws {
+    @Test func testMismatchedWorkspaceDeclinesTheRestore() async throws {
         let workspaceA = Workspace.get(byName: name)
         let workspaceB = Workspace.get(byName: "other")
         let w1 = TestWindow.new(id: 1, parent: workspaceA.rootTilingContainer, adaptiveWeight: 200)
@@ -275,7 +276,7 @@ final class MacosFullscreenLayoutTest: XCTestCase {
     /// `normalizeLayoutReason` alone never calls `normalizeContainers`), and that artifact self-heals on the next
     /// normalization pass under the (production-default) flatten-containers setting, same as any other
     /// single-child container would.
-    func testNestedContainerSurvivesWhenItsOtherWindowClosed() async throws {
+    @Test func testNestedContainerSurvivesWhenItsOtherWindowClosed() async throws {
         config.enableNormalizationFlattenContainers = true
         let workspace = Workspace.get(byName: name)
         let root = workspace.rootTilingContainer
@@ -311,7 +312,7 @@ final class MacosFullscreenLayoutTest: XCTestCase {
     /// returning window: it holds two windows that are both closed while the fullscreen window is away. So every
     /// child of that snapshot container gets skipped by `restoreTreeRecursive`, and the container it already
     /// constructed for that snapshot node is left in the rebuilt tree with no children at all.
-    func testNestedContainerLeftEmptyIsCleanedUpByNormalization() async throws {
+    @Test func testNestedContainerLeftEmptyIsCleanedUpByNormalization() async throws {
         let workspace = Workspace.get(byName: name)
         let root = workspace.rootTilingContainer
         let w1 = TestWindow.new(id: 1, parent: root)
@@ -349,7 +350,7 @@ final class MacosFullscreenLayoutTest: XCTestCase {
         )
     }
 
-    func testLayoutChangingCommandInvalidatesTheSnapshot() async throws {
+    @Test func testLayoutChangingCommandInvalidatesTheSnapshot() async throws {
         let workspace = Workspace.get(byName: name)
         let w1 = TestWindow.new(id: 1, parent: workspace.rootTilingContainer, adaptiveWeight: 200)
         let w2 = TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: 500)
@@ -377,7 +378,7 @@ final class MacosFullscreenLayoutTest: XCTestCase {
     /// `BalanceSizesCommand` rewrites every tiling weight in the workspace (evening out siblings recursively), which
     /// is plainly a layout change, so it must invalidate the snapshot exactly like
     /// `testLayoutChangingCommandInvalidatesTheSnapshot` demonstrates for `flatten-workspace-tree`.
-    func testBalanceSizesInvalidatesTheSnapshot() async throws {
+    @Test func testBalanceSizesInvalidatesTheSnapshot() async throws {
         let workspace = Workspace.get(byName: name)
         let w1 = TestWindow.new(id: 1, parent: workspace.rootTilingContainer, adaptiveWeight: 200)
         let w2 = TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: 500)
@@ -405,7 +406,7 @@ final class MacosFullscreenLayoutTest: XCTestCase {
         assertEquals(w3.hWeight, 250)
     }
 
-    func testResettingSnapshotsFallsBackToOldBehavior() async throws {
+    @Test func testResettingSnapshotsFallsBackToOldBehavior() async throws {
         let workspace = Workspace.get(byName: name)
         let w1 = TestWindow.new(id: 1, parent: workspace.rootTilingContainer, adaptiveWeight: 200)
         let w2 = TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: 500)
@@ -427,7 +428,7 @@ final class MacosFullscreenLayoutTest: XCTestCase {
         assertEquals(w1.hWeight, 600) // not restored
     }
 
-    func testDroppingOneSnapshotFallsBackToOldBehavior() async throws {
+    @Test func testDroppingOneSnapshotFallsBackToOldBehavior() async throws {
         let workspace = Workspace.get(byName: name)
         let w1 = TestWindow.new(id: 1, parent: workspace.rootTilingContainer, adaptiveWeight: 200)
         let w2 = TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: 500)

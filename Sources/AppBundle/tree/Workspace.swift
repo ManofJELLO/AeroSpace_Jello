@@ -65,17 +65,18 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
             _ = get(byName: name) // Make sure that all persistent workspaces are "cached"
         }
         let focus = globalFocus
-        let (alive, garbage) = workspaceNameToWorkspace.partition { (_, workspace: Workspace) in
-            config.persistentWorkspaces.contains(workspace.name) ||
-                !workspace.isEffectivelyEmpty ||
-                workspace.isVisible ||
-                workspace.name == focus.workspace.name
+        let garbage = workspaceNameToWorkspace.values.filter { workspace in
+            !config.persistentWorkspaces.contains(workspace.name) &&
+                workspace.isEffectivelyEmpty &&
+                !workspace.isVisible &&
+                workspace.name != focus.workspace.name
         }
-        workspaceNameToWorkspace = alive
-        // A collected workspace is still bound under its monitor. Left there, recreating a workspace of the same name
-        // puts two of them side by side, and the monitor goes on finding the stale one
-        for workspace in garbage.values where workspace.parent != nil {
-            workspace.unbindFromParent()
+        for workspace in garbage {
+            workspaceNameToWorkspace.removeValue(forKey: workspace.name)
+            // `parent` is weak: it's already gone if the monitor went away with no other monitor to rebind to
+            if workspace.parent != nil {
+                workspace.unbindFromParent()
+            }
         }
     }
 
