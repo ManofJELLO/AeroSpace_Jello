@@ -15,7 +15,7 @@ extension Workspace {
 
 extension TreeNode {
     @MainActor
-    fileprivate func layoutRecursive(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
+    fileprivate func layoutRecursive(_ point: Point, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
         let physicalRect = Rect(topLeftX: point.x, topLeftY: point.y, width: width, height: height)
         switch nodeCases {
             case .monitor(let it):
@@ -96,7 +96,7 @@ extension Window {
             newX = newX.coerce(in: workspaceRect.minX ... max(workspaceRect.minX, workspaceRect.maxX - windowWidth))
             newY = newY.coerce(in: workspaceRect.minY ... max(workspaceRect.minY, workspaceRect.maxY - windowHeight))
 
-            setAxFrame(CGPoint(x: newX, y: newY), nil)
+            setAxFrame(Point(x: newX, y: newY), nil)
         }
         if isFullscreen {
             layoutFullscreen(context)
@@ -115,12 +115,12 @@ extension Window {
 
 extension TilingContainer {
     @MainActor
-    fileprivate func layoutTiles(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
+    fileprivate func layoutTiles(_ point: Point, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
         try await layoutSequentially(inhabitedChildren, along: orientation, point, width: width, height: height, virtual: virtual, context)
     }
 
     @MainActor
-    fileprivate func layoutAccordion(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
+    fileprivate func layoutAccordion(_ point: Point, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
         let inhabitedChildren = inhabitedChildren
 
         guard let mruIndex: Int = mostRecentInhabitedChild?.ownIndex(in: .inhabitedOnly) else { return }
@@ -137,7 +137,7 @@ extension TilingContainer {
             switch orientation {
                 case .h:
                     try await child.layoutRecursive(
-                        point + CGPoint(x: lPadding, y: 0),
+                        point + Point(x: lPadding, y: 0),
                         width: width - rPadding - lPadding,
                         height: height,
                         virtual: virtual,
@@ -145,7 +145,7 @@ extension TilingContainer {
                     )
                 case .v:
                     try await child.layoutRecursive(
-                        point + CGPoint(x: 0, y: lPadding),
+                        point + Point(x: 0, y: lPadding),
                         width: width,
                         height: height - lPadding - rPadding,
                         virtual: virtual,
@@ -165,7 +165,7 @@ extension TilingContainer {
 private func layoutSequentially(
     _ nodes: [TreeNode],
     along orientation: Orientation,
-    _ point: CGPoint,
+    _ point: Point,
     width: CGFloat,
     height: CGFloat,
     virtual: Rect,
@@ -220,7 +220,7 @@ private func layoutSequentially(
 private func layoutMasterColumn(
     _ nodes: [TreeNode],
     along orientation: Orientation,
-    _ point: CGPoint,
+    _ point: Point,
     width: CGFloat,
     height: CGFloat,
     virtual: Rect,
@@ -286,7 +286,7 @@ private struct MasterSlot {
 
 extension TilingContainer {
     @MainActor
-    fileprivate func layoutMaster(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
+    fileprivate func layoutMaster(_ point: Point, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
         let axis = effectiveOrientation
         let physicalExtent = axis == .h ? width : height
         let virtualExtent = virtual.getDimension(axis)

@@ -120,6 +120,13 @@ restore_generated() {
 }
 trap restore_generated EXIT
 
+# Package.swift targets the host's macOS unless told otherwise, so without this
+# the release would refuse to launch on anything older than the build machine.
+# Exported, so that the SwiftPM build of the CLI and xcodebuild's package
+# resolution for the app both see it, same as upstream's build-release.sh.
+source ./versions.sh
+export SWIFTPM_MACOS_MIN_DEPLOYMENT_TARGET=$MACOS_MIN_DEPLOYMENT_TARGET
+
 step "Generating sources"
 # --ignore-xcodeproj avoids needing xcodegen; the .xcodeproj is committed.
 ./generate.sh --ignore-xcodeproj
@@ -223,6 +230,15 @@ check_build_info() {
 }
 check_build_info ".release/$zip_root/AeroSpace.app/Contents/MacOS/AeroSpace"
 check_build_info ".release/$zip_root/bin/aerospace"
+check_deployment_target() {
+    for arch in x86_64 arm64; do
+        minos="$(xcrun vtool -arch "$arch" -show-build "$1" | awk '$1 == "minos" { print $2 }')"
+        test "$minos" == "$MACOS_MIN_DEPLOYMENT_TARGET.0" \
+            || die "$1 ($arch) targets macOS $minos, expected $MACOS_MIN_DEPLOYMENT_TARGET.0"
+    done
+}
+check_deployment_target ".release/$zip_root/AeroSpace.app/Contents/MacOS/AeroSpace"
+check_deployment_target ".release/$zip_root/bin/aerospace"
 
 (cd .release && zip -qr "$zip_name" "$zip_root")
 sha=$(shasum -a 256 ".release/$zip_name" | awk '{print $1}')

@@ -37,7 +37,7 @@ final class TestWindow: Window, CustomStringConvertible {
         app.focusedWindow = self
     }
 
-    override func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) {
+    override func setAxFrame(_ topLeft: Point?, _ size: CGSize?) {
         _rect = Rect(
             topLeftX: topLeft?.x ?? _rect?.topLeftX ?? 0,
             topLeftY: topLeft?.y ?? _rect?.topLeftY ?? 0,

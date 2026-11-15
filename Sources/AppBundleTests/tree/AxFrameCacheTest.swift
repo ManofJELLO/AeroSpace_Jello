@@ -5,8 +5,8 @@ import Testing
 @MainActor
 @Suite(.serializedGlobally)
 struct AxFrameCacheTest {
-    private let frame = AxFrame(topLeft: CGPoint(x: 0, y: 0), size: CGSize(width: 100, height: 100))
-    private let other = AxFrame(topLeft: CGPoint(x: 50, y: 50), size: CGSize(width: 100, height: 100))
+    private let frame = AxFrame(topLeft: Point(x: 0, y: 0), size: CGSize(width: 100, height: 100))
+    private let other = AxFrame(topLeft: Point(x: 50, y: 50), size: CGSize(width: 100, height: 100))
 
     @Test func testASettledWindowIsLeftAlone() {
         assertTrue(canSkipFrameWrite(request: frame, lastRequest: frame, lastObserved: frame, current: frame))

@@ -691,7 +691,7 @@ struct MasterMouseDropTest {
         let (workspace, windows) = try await stackWorkspace()
 
         // windows[2], the middle stack window
-        moveTilingWindow(windows[1], cursor: CGPoint(x: 1500, y: 600))
+        moveTilingWindow(windows[1], cursor: Point(x: 1500, y: 600))
 
         assertEquals(workspace.rootTilingContainer.layoutDescription,
                      .h_master([.window(1), .window(3), .window(2), .window(4)]))
@@ -703,7 +703,7 @@ struct MasterMouseDropTest {
             let (workspace, windows) = try await stackWorkspace()
 
             // Anywhere inside windows[2] means the same thing: put the dragged window there
-            moveTilingWindow(windows[3], cursor: CGPoint(x: 1500, y: CGFloat(y)))
+            moveTilingWindow(windows[3], cursor: Point(x: 1500, y: CGFloat(y)))
 
             assertEquals(workspace.rootTilingContainer.layoutDescription,
                          .h_master([.window(1), .window(2), .window(4), .window(3)]))
@@ -718,7 +718,7 @@ struct MasterMouseDropTest {
             setUpWorkspacesForTests()
             let (workspace, windows) = try await stackWorkspace()
 
-            moveTilingWindow(windows[2], cursor: CGPoint(x: 500, y: CGFloat(y)))
+            moveTilingWindow(windows[2], cursor: Point(x: 500, y: CGFloat(y)))
 
             // The window lands in the master slot and the rest shift along by one. A swap would instead have
             // flung the old master all the way down to windows[2]'s slot
@@ -732,7 +732,7 @@ struct MasterMouseDropTest {
 
         // Dragging somewhere and back again has to cancel. A window is never its own drop target, so this resolves
         // to no target at all rather than to a swap
-        moveTilingWindow(windows[2], cursor: CGPoint(x: 1500, y: 600))
+        moveTilingWindow(windows[2], cursor: Point(x: 1500, y: 600))
 
         assertEquals(workspace.rootTilingContainer.layoutDescription,
                      .h_master([.window(1), .window(2), .window(3), .window(4)]))
@@ -744,7 +744,7 @@ struct MasterMouseDropTest {
         let nestedWindow = TestWindow.new(id: 3, parent: nested)
         try await workspace.layoutWorkspace()
 
-        moveTilingWindow(nestedWindow, cursor: CGPoint(x: 500, y: 100))
+        moveTilingWindow(nestedWindow, cursor: Point(x: 500, y: 100))
 
         // The emptied nested container is left behind for the next normalizeContainers() pass to collect
         assertEquals(workspace.rootTilingContainer.layoutDescription,
@@ -759,7 +759,7 @@ struct MasterMouseDropTest {
         // leaves nothing behind. windows[1]'s own slot no longer reports a rect while it is being dragged, so the
         // cursor finds no drop target there
         beginTilingDrag(windows[1])
-        commitTilingDragIfNeeded(cursor: CGPoint(x: 1500, y: 200))
+        commitTilingDragIfNeeded(cursor: Point(x: 1500, y: 200))
 
         assertEquals(workspace.rootTilingContainer.layoutDescription, before)
     }
@@ -769,7 +769,7 @@ struct MasterMouseDropTest {
 
         beginTilingDrag(windows[3])
         // Only the release position matters, so a quick flick lands the same as a slow drag
-        commitTilingDragIfNeeded(cursor: CGPoint(x: 500, y: 100))
+        commitTilingDragIfNeeded(cursor: Point(x: 500, y: 100))
 
         assertEquals(workspace.rootTilingContainer.layoutDescription,
                      .h_master([.window(4), .window(1), .window(2), .window(3)]))
@@ -781,7 +781,7 @@ struct MasterMouseDropTest {
         let (workspace, windows) = try await stackWorkspace()
 
         beginTilingDrag(windows[3])
-        previewTilingDrag(windows[3], cursor: CGPoint(x: 500, y: 100)) // over the master area
+        previewTilingDrag(windows[3], cursor: Point(x: 500, y: 100)) // over the master area
 
         // With the flag on the tree changes while the drag is still in flight
         assertEquals(workspace.rootTilingContainer.layoutDescription,
@@ -793,12 +793,12 @@ struct MasterMouseDropTest {
         let (workspace, windows) = try await stackWorkspace()
 
         beginTilingDrag(windows[3])
-        previewTilingDrag(windows[3], cursor: CGPoint(x: 500, y: 100))
+        previewTilingDrag(windows[3], cursor: Point(x: 500, y: 100))
         // Opened while the drag is in flight, so the snapshot has never heard of it. Rebuilding the tree around it
         // leaves the workspace holding two tiling containers for a moment, and asking for *the* root then is fatal
         TestWindow.new(id: 99, parent: workspace.rootTilingContainer)
 
-        previewTilingDrag(windows[3], cursor: CGPoint(x: 1500, y: 600))
+        previewTilingDrag(windows[3], cursor: Point(x: 1500, y: 600))
 
         let ids = workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.windowId).toSet()
         #expect(ids.contains(99), "the window that appeared mid-drag was dropped")
@@ -810,15 +810,15 @@ struct MasterMouseDropTest {
         let before = workspace.rootTilingContainer.layoutDescription
 
         beginTilingDrag(windows[3])
-        previewTilingDrag(windows[3], cursor: CGPoint(x: 500, y: 100)) // promote to master
+        previewTilingDrag(windows[3], cursor: Point(x: 500, y: 100)) // promote to master
         assertNotEquals(workspace.rootTilingContainer.layoutDescription, before)
 
         // Wander back to where the drag started. The cursor is then over the slot the window came from, which
         // resolves to no drop target at all, so only rebuilding the pre-drag arrangement can bring the layout back.
         // (Previews that do land on a target converge on their own, because a drop is expressed relative to the
         // window under the cursor and that window's identity doesn't shift.)
-        previewTilingDrag(windows[3], cursor: CGPoint(x: 1500, y: 900))
-        commitTilingDragIfNeeded(cursor: CGPoint(x: 1500, y: 900))
+        previewTilingDrag(windows[3], cursor: Point(x: 1500, y: 900))
+        commitTilingDragIfNeeded(cursor: Point(x: 1500, y: 900))
 
         assertEquals(workspace.rootTilingContainer.layoutDescription, before)
     }
@@ -828,7 +828,7 @@ struct MasterMouseDropTest {
         let before = workspace.rootTilingContainer.layoutDescription
 
         beginTilingDrag(windows[3])
-        previewTilingDrag(windows[3], cursor: CGPoint(x: 500, y: 100))
+        previewTilingDrag(windows[3], cursor: Point(x: 500, y: 100))
 
         assertEquals(workspace.rootTilingContainer.layoutDescription, before)
     }
@@ -840,7 +840,7 @@ struct MasterMouseDropTest {
         try await workspace.layoutWorkspace()
 
         // 'tiles' keeps the upstream behavior: the two windows trade places, nothing shifts along
-        moveTilingWindow(windows[2], cursor: CGPoint(x: 100, y: 500))
+        moveTilingWindow(windows[2], cursor: Point(x: 100, y: 500))
 
         assertEquals(container.layoutDescription, .h_tiles([.window(3), .window(2), .window(1)]))
     }

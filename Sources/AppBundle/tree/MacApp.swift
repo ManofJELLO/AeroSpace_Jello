@@ -152,7 +152,12 @@ final class MacApp: AbstractApp {
         if (!NSScreen.screensHaveSeparateSpaces || globalUnsortedMonitorInfos.count == 1) &&
             (lastFocusedNativeWindowOpaqueId == windowId || windowsCount == 1)
         {
-            nsApp.activate(options: .activateIgnoringOtherApps)
+            if #available(macOS 14, *) {
+                nsApp.activate()
+            } else {
+                // Deprecated since #macos14
+                nsApp.activate(options: .activateIgnoringOtherApps)
+            }
         } else {
             MacApp.focusJob = withWindowAsync(windowId, .cancellable) { [nsApp] window, job in
                 // Raise firstly to make sure that by the time we activate the app, the window would be already on top
@@ -165,7 +170,12 @@ final class MacApp: AbstractApp {
                     // app's main window, which on its own doesn't move the keyboard focus
                     window.set(Ax.isFocused, true)
                 }
-                nsApp.activate(options: .activateIgnoringOtherApps)
+                if #available(macOS 14, *) {
+                    nsApp.activate()
+                } else {
+                    // Deprecated since #macos14
+                    nsApp.activate(options: .activateIgnoringOtherApps)
+                }
             }
         }
     }
@@ -186,7 +196,7 @@ final class MacApp: AbstractApp {
     }
 
     /// `force` bypasses the frame cache, for a window whose real position AeroSpace can't yet have been told about
-    func setAxFrame(_ windowId: OpaqueWindowId, _ topLeft: CGPoint?, _ size: CGSize?, force: Bool = false) {
+    func setAxFrame(_ windowId: OpaqueWindowId, _ topLeft: Point?, _ size: CGSize?, force: Bool = false) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         setFrameJobs[windowId] = withAxWindowAsync(windowId, .cancellable) { [axApp] window, job in
             // Writing a frame costs up to six AX round trips: reading and toggling the enhanced-user-interface
@@ -228,7 +238,7 @@ final class MacApp: AbstractApp {
         }
     }
 
-    func setAxFrameForTermination(_ windowId: OpaqueWindowId, _ topLeft: CGPoint?, _ size: CGSize?) {
+    func setAxFrameForTermination(_ windowId: OpaqueWindowId, _ topLeft: Point?, _ size: CGSize?) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         let semaphore = DispatchSemaphore(value: 0)
         let job = withWindowAsync(windowId, .nonCancellable) { [axApp] window, job in
@@ -571,7 +581,7 @@ private func getAxRect(window: AXUIElement, job: RunLoopJob) throws -> Rect? {
     return Rect(topLeftX: topLeftCorner.x, topLeftY: topLeftCorner.y, width: size.width, height: size.height)
 }
 
-private func setFrame(_ window: AXUIElement, _ topLeft: CGPoint?, _ size: CGSize?, _ job: RunLoopJob) throws {
+private func setFrame(_ window: AXUIElement, _ topLeft: Point?, _ size: CGSize?, _ job: RunLoopJob) throws {
     // Set size and then the position. The order is important https://github.com/nikitabobko/AeroSpace/issues/143
     //                                                        https://github.com/nikitabobko/AeroSpace/issues/335
     if let size { window.set(Ax.sizeAttr, size) }

@@ -11,10 +11,11 @@ import Foundation
         try await wip.await(cm)
         return cache[windowId]
     }
-    wip = AwaitableOneTimeBroadcastLatch()
+    let latch = AwaitableOneTimeBroadcastLatch()
+    defer { await latch.signalToAll() }
+    wip = latch
     cache = await computeCache()
     wip = nil
-    await wip?.signalToAll()
     return cache[windowId]
 }
 

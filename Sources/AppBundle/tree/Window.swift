@@ -64,9 +64,9 @@ open class Window: TreeNode, Hashable {
     /// Puts this window back on top of its app's other windows, without touching focus
     @MainActor func nativeRaise() { die("Not implemented") }
     func getAxRect(_ cm: CancellationMode) async throws -> Rect? { die("Not implemented") }
-    func getCenter(_ cm: CancellationMode) async throws -> CGPoint? { try await getAxRect(cm)?.center }
+    func getCenter(_ cm: CancellationMode) async throws -> Point? { try await getAxRect(cm)?.center }
 
-    func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) { die("Not implemented") }
+    func setAxFrame(_ topLeft: Point?, _ size: CGSize?) { die("Not implemented") }
 }
 
 /// How far off a requested size has to land before it counts as the app refusing rather than rounding

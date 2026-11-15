@@ -24,10 +24,10 @@ func isManipulatedWithMouse(_ window: Window) async throws -> Bool {
 }
 
 /// Same motivation as in monitorFrameNormalized
-var mouseLocation: CGPoint { NSEvent.mouseLocation.withYAxisFlipped }
+var mouseLocation: Point { NSEvent.mouseLocation.asMyPoint.withYAxisFlipped }
 
 /// Where the left button was last pressed, so that a release can tell a drag from a click that wandered a little
-@MainActor var lastMouseDown: CGPoint? = nil
+@MainActor var lastMouseDown: Point? = nil
 
 /// Where and when the left button was last released, while it is still plausible that a drag notification is on its
 /// way for it.
@@ -35,7 +35,7 @@ var mouseLocation: CGPoint { NSEvent.mouseLocation.withYAxisFlipped }
 /// A drag is only recognised once the app reports that its window moved, and on a quick flick that report loses its
 /// race with the release: the notification's handler sees the button already up and throws the drag away. Leaving the
 /// release position behind lets the notification land late and still be applied where the button actually came up
-@MainActor private var pendingLateDrag: (cursor: CGPoint, at: ContinuousClock.Instant, releaseId: Int, windowId: OpaqueWindowId)? = nil
+@MainActor private var pendingLateDrag: (cursor: Point, at: ContinuousClock.Instant, releaseId: Int, windowId: OpaqueWindowId)? = nil
 /// The release whose drag has already been applied, so that a duplicate of it can't set one up again
 @MainActor private var handledReleaseId: Int? = nil
 
@@ -49,7 +49,7 @@ private let lateDragGrace: Duration = .milliseconds(300)
 /// `releaseId` is the event's `eventNumber`. macOS hands a global monitor the same mouse-up twice while a window is
 /// being dragged -- same event number, a few milliseconds apart -- and the duplicate must not disturb what the first
 /// one set up, nor arm a second drag of its own
-@MainActor func armLateDrag(releasedAt cursor: CGPoint, releaseId: Int) {
+@MainActor func armLateDrag(releasedAt cursor: Point, releaseId: Int) {
     if handledReleaseId == releaseId || pendingLateDrag?.releaseId == releaseId { return }
     guard let press = lastMouseDown, press.distance(to: cursor) > dragThreshold else { return }
     // Remember which window was pressed. Without it any window that happens to report a move within the grace --
@@ -67,7 +67,7 @@ private let lateDragGrace: Duration = .milliseconds(300)
 
 /// The position of a release still waiting for its move notification, if there is one. One shot: a second caller,
 /// such as the notification our own re-layout provokes, gets nothing
-@MainActor func consumeLateDrag(for windowId: OpaqueWindowId) -> CGPoint? {
+@MainActor func consumeLateDrag(for windowId: OpaqueWindowId) -> Point? {
     guard let pending = pendingLateDrag, pending.windowId == windowId else { return nil }
     pendingLateDrag = nil
     return pending.at.advanced(by: lateDragGrace) > .now ? pending.cursor : nil

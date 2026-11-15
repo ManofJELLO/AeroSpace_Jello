@@ -4,7 +4,7 @@ import AppKit
 /// independently
 // periphery:ignore - both fields are read by the synthesized Equatable, which periphery doesn't follow
 struct AxFrame: Equatable {
-    let topLeft: CGPoint?
+    let topLeft: Point?
     let size: CGSize?
 }
 

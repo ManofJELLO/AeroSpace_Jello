@@ -104,14 +104,14 @@ func beginTilingDrag(_ window: Window) {
 
 /// Shows where the window would land if it were released now. Does nothing unless `live-drag-preview` is on
 @MainActor
-func previewTilingDrag(_ window: Window, cursor: CGPoint) {
+func previewTilingDrag(_ window: Window, cursor: Point) {
     dragPreview?.apply(dragged: window, cursor: cursor)
 }
 
 /// Applies a tiling drag at the position the cursor was released at. Call on mouse-up, before the manipulation state
 /// is cleared, so that the refresh it schedules lays out the result
 @MainActor
-func commitTilingDragIfNeeded(cursor: CGPoint) {
+func commitTilingDragIfNeeded(cursor: Point) {
     guard let windowId = currentlyDraggedWithMouseWindowId else { return }
     currentlyDraggedWithMouseWindowId = nil
     defer { dragPreview = nil }
@@ -157,7 +157,7 @@ private final class TilingDragPreview {
 
     /// A coarse description of where the cursor is in the pre-drag arrangement. Used only to tell one mouse event
     /// from the next, so erring towards "changed" merely costs a redundant re-apply
-    func intent(at cursor: CGPoint, dragged: Window) -> DragIntent {
+    func intent(at cursor: Point, dragged: Window) -> DragIntent {
         let target = rects.first { $0.key != dragged.windowId && $0.value.contains(cursor) }
         return DragIntent(
             workspaceName: cursor.monitorApproximation.visibleWorkspace.name,
@@ -167,7 +167,7 @@ private final class TilingDragPreview {
         )
     }
 
-    func apply(dragged: Window, cursor: CGPoint) {
+    func apply(dragged: Window, cursor: Point) {
         restore(dragged: dragged)
         currentlyManipulatedWithMouseWindowId = dragged.windowId
         dragged.lastAppliedLayoutPhysicalRect = nil
@@ -231,7 +231,7 @@ private enum TilingDrop {
 
 /// `cursor` is a parameter rather than read from ``mouseLocation`` so that the drop logic can be tested
 @MainActor
-func moveTilingWindow(_ window: Window, cursor: CGPoint) {
+func moveTilingWindow(_ window: Window, cursor: Point) {
     currentlyManipulatedWithMouseWindowId = window.windowId
     window.lastAppliedLayoutPhysicalRect = nil
     window.needsUnconditionalFrameWrite = true
@@ -241,7 +241,7 @@ func moveTilingWindow(_ window: Window, cursor: CGPoint) {
 /// `rects` overrides where each window is taken to be. A live preview passes the pre-drag rects so that the drop
 /// targets stay still while the preview rearranges the windows underneath the cursor
 @MainActor
-private func planTilingDrop(_ window: Window, cursor: CGPoint, rects: [OpaqueWindowId: Rect]? = nil) -> TilingDrop? {
+private func planTilingDrop(_ window: Window, cursor: Point, rects: [OpaqueWindowId: Rect]? = nil) -> TilingDrop? {
     let targetWorkspace = cursor.monitorApproximation.visibleWorkspace
     let dropTarget = dropTargetWindow(at: cursor, in: targetWorkspace, excluding: window, rects: rects)
     if targetWorkspace != window.nodeWorkspace { // Move window to a different monitor
@@ -294,7 +294,7 @@ private func planTilingDrop(_ window: Window, cursor: CGPoint, rects: [OpaqueWin
 /// over the slot it came from resolves to nothing and leaves the layout alone
 @MainActor
 private func dropTargetWindow(
-    at cursor: CGPoint,
+    at cursor: Point,
     in workspace: Workspace,
     excluding window: Window,
     rects: [OpaqueWindowId: Rect]?,
@@ -332,7 +332,7 @@ extension Window {
     }
 }
 
-extension CGPoint {
+extension Point {
     @MainActor
     func findWindowRecursively(
         in tree: TilingContainer,

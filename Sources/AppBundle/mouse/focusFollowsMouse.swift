@@ -5,7 +5,7 @@ import Common
 @MainActor private var focusFollowsTask: Task<(), any Error>? = nil
 /// The newest pointer position that hasn't been acted on yet. Mouse moves arrive an order of magnitude faster than a
 /// focus change can be carried out, so they are coalesced here instead of each one starting its own attempt
-@MainActor private var pendingFocusFollowsLocation: CGPoint? = nil
+@MainActor private var pendingFocusFollowsLocation: Point? = nil
 /// The window the pointer is currently over, and when it entered. `delay-ms` is measured against this: how long the
 /// pointer has been inside one window's region, not how long it has been holding still
 @MainActor private var hoveredSince: (windowId: OpaqueWindowId, since: ContinuousClock.Instant)? = nil
@@ -28,7 +28,7 @@ import Common
     // Interestingly, this callback seems to not fire when the mouse is down which is good,
     // because this is how I want it to work for windows/tabs/files dragging
     focusFollowsMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { @MainActor event in
-        pendingFocusFollowsLocation = event.locationInWindow.withYAxisFlipped
+        pendingFocusFollowsLocation = event.locationInWindow.asMyPoint.withYAxisFlipped
         startFocusFollowsMouseWorker()
     }
 }
@@ -62,7 +62,7 @@ import Common
 
 /// Returns how much longer the pointer has to stay in this window before focus should move, or `nil` when there is
 /// nothing left to wait for
-@MainActor private func focusWindow(under location: CGPoint) async throws -> Duration? {
+@MainActor private func focusWindow(under location: Point) async throws -> Duration? {
     guard let token: RunSessionGuard = .isServerEnabled else { return nil }
     let settings = config.focusFollowsMouse
     if settings.disableKey.isHeld { return nil }
@@ -131,7 +131,7 @@ import Common
 }
 
 @concurrent
-private nonisolated func isAxWindowUnderMouse(_ location: CGPoint) async -> Bool? {
+private nonisolated func isAxWindowUnderMouse(_ location: Point) async -> Bool? {
     let systemwide = AXUIElementCreateSystemWide()
     var element: AXUIElement?
     if unsafe AXUIElementCopyElementAtPosition(systemwide, Float(location.x), Float(location.y), &element) != .success {

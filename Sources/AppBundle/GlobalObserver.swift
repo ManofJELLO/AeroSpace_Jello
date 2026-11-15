@@ -64,14 +64,14 @@ enum GlobalObserver {
         nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main, using: onNotif)
 
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { @MainActor event in
-            lastMouseDown = event.locationInWindow.withYAxisFlipped
+            lastMouseDown = event.locationInWindow.asMyPoint.withYAxisFlipped
         }
 
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { @MainActor event in
             // Taken from the event, synchronously. Reading NSEvent.mouseLocation inside the task below gives
             // wherever the pointer has travelled to by the time the main actor gets round to it, which after a quick
             // flick is nowhere near where the button was actually released
-            let cursor = event.locationInWindow.withYAxisFlipped
+            let cursor = event.locationInWindow.asMyPoint.withYAxisFlipped
             // Armed synchronously, before the task below runs: a move notification can arrive before the release has
             // even been processed, and it needs to find the position waiting for it
             armLateDrag(releasedAt: cursor, releaseId: event.eventNumber)
